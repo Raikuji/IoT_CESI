@@ -69,24 +69,8 @@ export const useBuildingStore = defineStore('building', () => {
     { id: 'HALL2', name: 'Couloir', floor: 'R+2', x: 16, y: 28, width: 81, height: 25, type: 'common', capacity: 50, area: 200 }
   ])
 
-  // Sensors placed in rooms
-  const sensors = ref([
-    // Default sensors in some rooms for demo
-    { id: 'temp-x101', type: 'temperature', roomId: 'X101', x: 50, y: 30, name: 'Température Open Space', value: 22.5, unit: '°C', status: 'ok' },
-    { id: 'hum-x101', type: 'humidity', roomId: 'X101', x: 70, y: 30, name: 'Humidité Open Space', value: 45, unit: '%', status: 'ok' },
-    { id: 'pres-x101', type: 'presence', roomId: 'X101', x: 50, y: 70, name: 'Présence Open Space', value: 1, unit: '', status: 'ok' },
-    
-    { id: 'temp-x108', type: 'temperature', roomId: 'X108', x: 50, y: 40, name: 'Température Salle X108', value: 21.8, unit: '°C', status: 'ok' },
-    { id: 'pres-x108', type: 'presence', roomId: 'X108', x: 50, y: 70, name: 'Présence Salle X108', value: 0, unit: '', status: 'ok' },
-    
-    { id: 'temp-numerilab', type: 'temperature', roomId: 'NUMERILAB', x: 50, y: 40, name: 'Température Numérillab', value: 23.2, unit: '°C', status: 'ok' },
-    { id: 'hum-numerilab', type: 'humidity', roomId: 'NUMERILAB', x: 70, y: 40, name: 'Humidité Numérillab', value: 42, unit: '%', status: 'ok' },
-    
-    { id: 'temp-fablab', type: 'temperature', roomId: 'FABLAB', x: 50, y: 40, name: 'Température FabLab', value: 24.1, unit: '°C', status: 'ok' },
-    
-    { id: 'temp-x201', type: 'temperature', roomId: 'X201', x: 50, y: 30, name: 'Température Open Space R+2', value: 22.0, unit: '°C', status: 'ok' },
-    { id: 'pres-x201', type: 'presence', roomId: 'X201', x: 50, y: 70, name: 'Présence Open Space R+2', value: 1, unit: '', status: 'ok' }
-  ])
+  // Sensors placed in rooms (empty by default, populated via MQTT or manual placement)
+  const sensors = ref([])
 
   // Available sensor types for drag & drop (no pressure)
   const sensorTypes = ref([

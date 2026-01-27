@@ -1,9 +1,15 @@
-# Campus IoT - CESI
+# Campus IoT - CESI Orion
 
-Système de monitoring IoT pour le campus CESI Nancy.
+Système de monitoring IoT pour le campus CESI Nancy - Bâtiment Orion.
 
-## Installation rapide
+## 🚀 Installation rapide
 
+### Prérequis
+
+- **Docker Desktop** (inclut Docker Compose)
+  - [Télécharger pour Mac](https://docs.docker.com/desktop/install/mac-install/)
+  - [Télécharger pour Windows](https://docs.docker.com/desktop/install/windows-install/)
+  - [Télécharger pour Linux](https://docs.docker.com/desktop/install/linux-install/)
 
 ### Installation en 3 étapes
 
@@ -19,7 +25,7 @@ cp env.example .env
 docker-compose up -d
 ```
 
-L'application est accessible sur **http://localhost**
+C'est tout ! L'application est accessible sur **http://localhost**
 
 ### Vérifier que tout fonctionne
 
@@ -34,7 +40,7 @@ docker-compose ps
 # - campus-frontend    (interface web)
 ```
 
-## Accès aux services
+## 🌐 Accès aux services
 
 | Service | URL | Description |
 |---------|-----|-------------|
@@ -43,7 +49,12 @@ docker-compose ps
 | **Documentation API** | http://localhost:8000/docs | Swagger UI |
 | **MQTT Broker** | localhost:1883 | Pour les capteurs |
 
-## Connexion
+## 👤 Connexion
+
+### Compte administrateur par défaut
+
+- **Email** : `theo.pellizzari@viacesi.fr`
+- **Mot de passe** : `admin123`
 
 ### Créer un nouveau compte
 
@@ -53,7 +64,24 @@ docker-compose ps
 
 > **Note** : Les nouveaux comptes ont le rôle "Utilisateur" par défaut. Un admin peut changer les rôles depuis le panel Admin.
 
-## Configuration
+## 🔧 Configuration
+
+### Variables d'environnement (.env)
+
+```env
+# Base de données
+POSTGRES_USER=campus
+POSTGRES_PASSWORD=campus_secret
+POSTGRES_DB=campus_iot
+
+# Backend
+SECRET_KEY=your_super_secret_key_change_me
+DATABASE_URL=postgresql://campus:campus_secret@postgres:5432/campus_iot
+
+# MQTT
+MQTT_BROKER=mosquitto
+MQTT_PORT=1883
+```
 
 ### Changer le mot de passe admin
 
@@ -61,7 +89,7 @@ docker-compose ps
 2. Aller dans Profil (icône utilisateur en haut à droite)
 3. Section "Changer le mot de passe"
 
-## Fonctionnalités
+## 📊 Fonctionnalités
 
 ### Dashboard
 - Vue d'ensemble des capteurs en temps réel
@@ -89,7 +117,7 @@ docker-compose ps
 - Historique des capteurs
 - Rapports
 
-## Commandes utiles
+## 🛠️ Commandes utiles
 
 ### Gestion Docker
 
@@ -152,7 +180,69 @@ docker exec campus-mosquitto mosquitto_pub \
   -t "campus/orion/X101/sensors/presence" -m "1"
 ```
 
-## Topics MQTT
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       DOCKER COMPOSE                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐                  │
+│  │PostgreSQL│◄───│ FastAPI  │◄───│  Nginx   │◄─── Navigateur   │
+│  │   :5432  │    │  :8000   │    │   :80    │                  │
+│  └──────────┘    └────┬─────┘    └──────────┘                  │
+│                       │                                         │
+│                       │ WebSocket                               │
+│                       ▼                                         │
+│  ┌──────────┐    ┌──────────┐                                  │
+│  │Mosquitto │◄───│ Vue.js   │                                  │
+│  │  :1883   │    │ Frontend │                                  │
+│  └──────────┘    └──────────┘                                  │
+│       ▲                                                         │
+│       │ MQTT                                                    │
+│       │                                                         │
+│  Capteurs (Arduino + XBee + Bridge Python)                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 📁 Structure du projet
+
+```
+campus-iot/
+├── backend/                 # API FastAPI (Python)
+│   ├── app/
+│   │   ├── api/            # Routes API
+│   │   ├── models/         # Modèles SQLAlchemy
+│   │   ├── schemas/        # Schémas Pydantic
+│   │   ├── services/       # MQTT, WebSocket
+│   │   └── main.py         # Point d'entrée
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── frontend/               # App Vue.js
+│   ├── src/
+│   │   ├── views/         # Pages
+│   │   ├── components/    # Composants
+│   │   ├── stores/        # Pinia stores
+│   │   ├── composables/   # Hooks Vue
+│   │   └── router/        # Routes
+│   ├── Dockerfile
+│   └── package.json
+│
+├── firmware/              # Code Arduino + Bridge
+│   ├── gateway/           # Passerelle XBee → MQTT
+│   ├── transmitter_*/     # Code capteurs
+│   ├── actuator_*/        # Code actionneurs
+│   └── README.md          # Doc firmware
+│
+├── mosquitto/             # Config broker MQTT
+├── postgres/              # Init base de données
+├── docker-compose.yml     # Orchestration
+└── README.md              # Ce fichier
+```
+
+## 🔌 Topics MQTT
 
 Format : `campus/orion/{SALLE}/sensors/{TYPE}`
 
@@ -167,10 +257,47 @@ Format : `campus/orion/{SALLE}/sensors/{TYPE}`
 
 Exemples de salles : `X101`, `X108`, `NUMERILAB`, `FABLAB`, `X201`, etc.
 
-## Équipe
+## 🐛 Dépannage
+
+### L'application ne démarre pas
+
+```bash
+# Vérifier les logs
+docker-compose logs
+
+# Problème de port déjà utilisé ?
+# Modifier les ports dans docker-compose.yml
+```
+
+### Erreur de connexion à la base de données
+
+```bash
+# Vérifier que postgres est démarré
+docker-compose ps postgres
+
+# Voir les logs postgres
+docker-compose logs postgres
+```
+
+### Les données ne s'affichent pas
+
+1. Vérifier la connexion WebSocket (F12 → Console → "WebSocket connected")
+2. Vérifier que le backend est connecté à MQTT (`/health` endpoint)
+3. Tester avec une publication MQTT manuelle (voir ci-dessus)
+
+### Réinitialisation complète
+
+```bash
+# Tout supprimer et recommencer
+docker-compose down -v
+docker system prune -f
+docker-compose up -d --build
+```
+
+## 👥 Équipe
 
 Projet A4 FISA - CESI Nancy - Groupe 3
 
-## Licence
+## 📄 Licence
 
 Projet académique - CESI 2026

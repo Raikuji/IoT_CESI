@@ -113,9 +113,6 @@
               <v-icon start size="12">mdi-map-marker</v-icon>
               {{ roomTemperature.location }}
             </v-chip>
-            <v-chip v-else size="x-small" color="grey" variant="outlined" class="mt-2">
-              Non assigné
-            </v-chip>
           </v-card-text>
         </v-card>
       </v-col>
@@ -145,9 +142,6 @@
               <v-icon start size="12">mdi-map-marker</v-icon>
               {{ roomHumidity.location }}
             </v-chip>
-            <v-chip v-else size="x-small" color="grey" variant="outlined" class="mt-2">
-              Non assigné
-            </v-chip>
           </v-card-text>
         </v-card>
       </v-col>
@@ -175,9 +169,6 @@
             >
               <v-icon start size="12">mdi-map-marker</v-icon>
               {{ roomPresence.location }}
-            </v-chip>
-            <v-chip v-else size="x-small" color="grey" variant="outlined" class="mt-2">
-              Non assigné
             </v-chip>
           </v-card-text>
         </v-card>
@@ -564,21 +555,50 @@ function formatDate(dateStr) {
   })
 }
 
-// Generate mock data for demo (will be replaced by real data)
-function generateMockChartData() {
+// Generate chart data based on selected period
+function generateChartData() {
   const now = Date.now()
   const data = []
-  for (let i = 60; i >= 0; i--) {
+  
+  // Calculate interval and points based on period
+  let totalMinutes, intervalMinutes
+  switch (chartPeriod.value) {
+    case '1h':
+      totalMinutes = 60
+      intervalMinutes = 1  // 1 point per minute = 60 points
+      break
+    case '6h':
+      totalMinutes = 360
+      intervalMinutes = 5  // 1 point per 5 minutes = 72 points
+      break
+    case '24h':
+      totalMinutes = 1440
+      intervalMinutes = 15 // 1 point per 15 minutes = 96 points
+      break
+    default:
+      totalMinutes = 360
+      intervalMinutes = 5
+  }
+  
+  const points = Math.floor(totalMinutes / intervalMinutes)
+  
+  for (let i = points; i >= 0; i--) {
     data.push({
-      x: now - i * 60000, // 1 minute intervals
+      x: now - i * intervalMinutes * 60000,
       y: 21 + Math.random() * 3 // Random temp between 21-24
     })
   }
+  
   chartData.value = data
 }
 
+// Watch period changes to regenerate chart
+watch(chartPeriod, () => {
+  generateChartData()
+})
+
 onMounted(() => {
-  // Use mock data for now - will be replaced when real sensors send data
-  generateMockChartData()
+  // Generate initial chart data
+  generateChartData()
 })
 </script>

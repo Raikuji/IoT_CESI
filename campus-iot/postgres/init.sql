@@ -89,26 +89,12 @@ CREATE TABLE IF NOT EXISTS system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default sensors (location will be set via MQTT or web app)
-INSERT INTO sensors (name, type, location, unit) VALUES
-    ('BME280 Temperature', 'temperature', NULL, '°C'),
-    ('BME280 Humidity', 'humidity', NULL, '%'),
-    ('HC-SR04 Presence', 'presence', NULL, 'bool')
-ON CONFLICT DO NOTHING;
+-- No default sensors - they will be auto-created when MQTT data arrives
+-- or manually added via the web app
 
--- Insert default actuators (location will be set via web app)
-INSERT INTO actuators (name, type, location, current_value) VALUES
-    ('Motor Servo', 'servo', NULL, 0),
-    ('Speaker Alert', 'speaker', NULL, 0)
-ON CONFLICT DO NOTHING;
+-- No default actuators - they will be added via the web app
 
--- Insert default alert rules
-INSERT INTO alert_rules (sensor_id, condition, threshold, message, severity) VALUES
-    (1, '>', 28.0, 'Temperature too high', 'warning'),
-    (1, '<', 16.0, 'Temperature too low', 'warning'),
-    (2, '>', 80.0, 'Humidity too high', 'info'),
-    (5, '>', 1000, 'CO2 level high - ventilate', 'danger')
-ON CONFLICT DO NOTHING;
+-- No default alert rules - they will be configured via the web app
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_sensor_data_time ON sensor_data (time DESC);
