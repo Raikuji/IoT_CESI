@@ -1,0 +1,225 @@
+// Campus IoT - Custom Styles
+// ==========================
+
+// CSS Variables
+:root {
+  --font-primary: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  // Glow effects
+  --glow-primary: 0 0 20px rgba(0, 255, 157, 0.3);
+  --glow-secondary: 0 0 20px rgba(255, 0, 110, 0.3);
+  --glow-accent: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+// Global styles
+* {
+  font-family: var(--font-primary);
+}
+
+body {
+  overflow-x: hidden;
+}
+
+// Scrollbar styling
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 157, 0.3);
+  border-radius: 4px;
+  
+  &:hover {
+    background: rgba(0, 255, 157, 0.5);
+  }
+}
+
+// Card glow effect
+.glow-card {
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      circle,
+      rgba(0, 255, 157, 0.1) 0%,
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  
+  &:hover::before {
+    opacity: 1;
+  }
+}
+
+// Animated gradient border
+.gradient-border {
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(
+      135deg,
+      #00ff9d,
+      #00d4ff,
+      #ff006e,
+      #00ff9d
+    );
+    background-size: 300% 300%;
+    animation: gradient-rotate 4s ease infinite;
+    -webkit-mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@keyframes gradient-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+// Pulse animation for live indicators
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+// Sensor value display
+.sensor-value {
+  font-family: var(--font-mono);
+  font-size: 2.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  
+  &.temperature { color: #ff6b6b; }
+  &.humidity { color: #4ecdc4; }
+  &.pressure { color: #a29bfe; }
+  &.presence { color: #00ff9d; }
+  &.co2 { color: #ffa502; }
+}
+
+// Status indicators
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  
+  &.online {
+    background: #00ff9d;
+    box-shadow: 0 0 10px #00ff9d;
+  }
+  
+  &.warning {
+    background: #ffa502;
+    box-shadow: 0 0 10px #ffa502;
+  }
+  
+  &.offline {
+    background: #ff4757;
+    box-shadow: 0 0 10px #ff4757;
+  }
+}
+
+// Chart container
+.chart-container {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+// Navigation rail custom
+.v-navigation-drawer {
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+// Glassmorphism effect
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+// Room plan styles
+.room-plan {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 157, 0.05) 0%,
+    rgba(0, 212, 255, 0.05) 100%
+  );
+  border: 2px solid rgba(0, 255, 157, 0.2);
+  border-radius: 16px;
+  
+  .sensor-marker {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: scale(1.2);
+    }
+    
+    &.active {
+      animation: marker-pulse 2s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes marker-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 255, 157, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 15px rgba(0, 255, 157, 0);
+  }
+}
+
+// Alert severity colors
+.alert-danger { border-left: 4px solid #ff4757 !important; }
+.alert-warning { border-left: 4px solid #ffa502 !important; }
+.alert-info { border-left: 4px solid #00d4ff !important; }
+
+// Responsive typography
+@media (max-width: 600px) {
+  .sensor-value {
+    font-size: 1.8rem;
+  }
+}
