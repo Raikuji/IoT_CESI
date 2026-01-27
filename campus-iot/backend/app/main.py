@@ -21,6 +21,7 @@ from api import (
     auth_router,
     activity_router
 )
+from api.security import router as security_router
 
 # Configure logging
 logging.basicConfig(
@@ -168,6 +169,7 @@ app.include_router(actuators_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
+app.include_router(security_router, prefix="/api")
 
 
 @app.get("/")

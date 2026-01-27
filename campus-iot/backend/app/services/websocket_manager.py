@@ -79,6 +79,29 @@ class WebSocketManager:
             }
         }
         await self.broadcast(message)
+    
+    async def broadcast_security_alert(self, alert_type: str, severity: str, description: str, raw_data: str = None):
+        """Broadcast a security alert (tampering, invalid signature, etc.)"""
+        message = {
+            "type": "security_alert",
+            "data": {
+                "alert_type": alert_type,
+                "severity": severity,
+                "description": description,
+                "raw_data": raw_data[:100] if raw_data else None,
+                "timestamp": None  # Will be set by frontend
+            }
+        }
+        logger.warning(f"[SECURITY] Broadcasting alert: {alert_type} - {description}")
+        await self.broadcast(message)
+    
+    async def broadcast_blockchain_update(self, block_data: dict):
+        """Broadcast new block added to blockchain"""
+        message = {
+            "type": "blockchain_update",
+            "data": block_data
+        }
+        await self.broadcast(message)
 
 
 # Singleton instance

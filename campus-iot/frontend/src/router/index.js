@@ -116,6 +116,17 @@ const routes = [
       requiresAdmin: true
     }
   },
+  {
+    path: '/security',
+    name: 'Security',
+    component: () => import('@/views/SecurityView.vue'),
+    meta: { 
+      icon: 'mdi-shield-lock', 
+      title: 'Sécurité', 
+      requiresAuth: true,
+      permission: 'security'
+    }
+  },
   
   // Admin only
   {
