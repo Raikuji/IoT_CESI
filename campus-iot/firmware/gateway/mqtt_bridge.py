@@ -18,16 +18,7 @@ except ImportError:
     print("Missing paho-mqtt. Run: pip install paho-mqtt")
     sys.exit(1)
 
-# =============================================================================
-# CONFIGURATION - MODIFY THESE VALUES
-# =============================================================================
-
-# Serial port of your Arduino Gateway
-# Find it with: ls /dev/cu.usb* (macOS) or ls /dev/ttyUSB* (Linux) or check Arduino IDE
-# macOS examples: /dev/cu.usbmodem14101, /dev/cu.usbserial-1420
-# Windows examples: COM3, COM4
-# Linux examples: /dev/ttyUSB0, /dev/ttyACM0
-SERIAL_PORT = "/dev/cu.usbmodem14101"  # <-- CHANGE THIS TO YOUR PORT
+SERIAL_PORT = "/dev/cu.usbmodem14101"  
 SERIAL_BAUD = 9600
 
 # MQTT Broker - localhost because Mosquitto runs in Docker
