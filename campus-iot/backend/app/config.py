@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # MQTT
     mqtt_broker: str = "mosquitto"  # Docker container name
     mqtt_port: int = 1883
-    mqtt_topic_prefix: str = "campus/orion"  # Will subscribe to campus/orion/+/sensors/#
+    mqtt_topic_prefix: str = "campus/orion"  # Will subscribe to campus/orion/sensors/#
     
     # Auth
     secret_key: str = "super_secret_key_change_me"

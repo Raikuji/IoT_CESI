@@ -23,10 +23,9 @@ class MQTTService:
         if reason_code == 0:
             logger.info(f"Connected to MQTT broker at {settings.mqtt_broker}:{settings.mqtt_port}")
             self.connected = True
-            # Subscribe to all sensor topics from all rooms
-            # Format: campus/orion/{ROOM}/sensors/{TYPE}
-            # The + wildcard matches any room (X101, X108, NUMERILAB, etc.)
-            topic = f"{settings.mqtt_topic_prefix}/+/sensors/#"
+            # Subscribe to all sensor topics
+            # Format: campus/orion/sensors/#
+            topic = f"{settings.mqtt_topic_prefix}/sensors/#"
             client.subscribe(topic)
             logger.info(f"Subscribed to {topic}")
         else:

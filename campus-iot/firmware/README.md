@@ -142,25 +142,25 @@ python gateway/mqtt_bridge.py
 
 ### Capteurs (sensors)
 
-Format : `campus/orion/{ROOM}/sensors/{TYPE}`
+Format : `campus/orion/sensors/{TYPE}`
 
 | Topic | Description | Valeurs |
 |-------|-------------|---------|
-| `.../sensors/temperature` | Température | Float (°C) |
-| `.../sensors/humidity` | Humidité | Float (%) |
-| `.../sensors/presence` | Présence | 0 ou 1 |
-| `.../sensors/light` | Luminosité | 0-100 (%) |
+| `campus/orion/sensors/temperature` | Température | Float (°C) |
+| `campus/orion/sensors/humidity` | Humidité | Float (%) |
+| `campus/orion/sensors/presence` | Présence | 0 ou 1 |
+| `campus/orion/sensors/light` | Luminosité | 0-100 (%) |
 
 ### Actionneurs (actuators)
 
-Format : `campus/orion/{ROOM}/actuators/{TYPE}`
+Format : `campus/orion/actuators/{TYPE}`
 
 | Topic | Description | Valeurs |
 |-------|-------------|---------|
-| `.../actuators/motor` | Commande moteur | 0-100, open, close |
-| `.../actuators/motor/position` | Position actuelle | 0-100 |
-| `.../actuators/speaker` | Commande buzzer | beep, warning, danger, co2, stop |
-| `.../actuators/speaker/active` | État actif | 0 ou 1 |
+| `campus/orion/actuators/motor` | Commande moteur | 0-100, open, close |
+| `campus/orion/actuators/motor/position` | Position actuelle | 0-100 |
+| `campus/orion/actuators/speaker` | Commande buzzer | beep, warning, danger, co2, stop |
+| `campus/orion/actuators/speaker/active` | État actif | 0 ou 1 |
 
 ## Câblage
 

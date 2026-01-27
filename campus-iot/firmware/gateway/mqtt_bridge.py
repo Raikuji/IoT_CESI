@@ -42,9 +42,9 @@ CLEAN_SESSION = False
 # Default room (used for direct publishing, gateway handles its own room)
 DEFAULT_ROOM = "X101"
 
-# Topic structure: campus/orion/{ROOM}/sensors/{TYPE}
+# Topic structure: campus/orion/sensors/{TYPE}
 TOPIC_PREFIX = "campus/orion"
-TOPIC_COMMANDS = f"{TOPIC_PREFIX}/+/actuators/#"
+TOPIC_COMMANDS = f"{TOPIC_PREFIX}/actuators/#"
 
 # =============================================================================
 # GLOBALS
