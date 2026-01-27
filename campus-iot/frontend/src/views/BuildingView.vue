@@ -75,20 +75,20 @@
           </v-card-title>
           
             <v-card-text class="pa-0">
+            <!-- Scrollable container -->
             <div 
-              class="plan-container"
+              class="plan-scroll-wrapper"
               ref="planContainer"
-              @wheel.prevent="handleWheel"
+              @mousedown="startPan"
+              @mousemove="doPan"
+              @mouseup="endPan"
+              @mouseleave="endPan"
             >
               <svg
-                :viewBox="`0 0 100 80`"
+                :viewBox="`0 0 200 100`"
                 class="building-svg"
                 preserveAspectRatio="xMidYMid meet"
                 :style="{ transform: `scale(${zoom}) translate(${panX}px, ${panY}px)` }"
-                @mousedown="startPan"
-                @mousemove="doPan"
-                @mouseup="endPan"
-                @mouseleave="endPan"
               >
                 <!-- Background grid -->
                 <defs>
@@ -107,12 +107,12 @@
                 </defs>
                 
                 <!-- Background -->
-                <rect width="100" height="80" fill="url(#grid)" class="plan-bg"/>
+                <rect width="200" height="100" fill="url(#grid)" class="plan-bg"/>
                 
                 <!-- Building outline - Long rectangular shape like real Orion -->
                 <rect 
                   x="2" y="5" 
-                  width="96" height="70" 
+                  width="196" height="90" 
                   fill="none" 
                   stroke="currentColor" 
                   stroke-width="0.4"
@@ -134,6 +134,13 @@
                 
                 <!-- Rooms -->
                 <g v-for="room in currentFloorRooms" :key="room.id">
+                  <!-- Clip path for this room -->
+                  <defs>
+                    <clipPath :id="`clip-${room.id}`">
+                      <rect :x="room.x + 1" :y="room.y + 1" :width="room.width - 2" :height="room.height - 2" />
+                    </clipPath>
+                  </defs>
+                  
                   <rect
                     :x="room.x"
                     :y="room.y"
@@ -146,48 +153,40 @@
                       { 'room-has-sensors': getRoomSensors(room.id).length > 0 }
                     ]"
                     :filter="selectedRoom?.id === room.id ? 'url(#glow)' : ''"
-                    rx="0.3"
+                    rx="1"
                     @click="selectRoom(room)"
                     @dragover.prevent
                     @drop="handleDrop($event, room)"
                   />
                   
-                  <!-- Room label -->
-                  <text
-                    :x="room.x + room.width / 2"
-                    :y="room.y + room.height / 2 - (room.height > 15 ? 2 : 0)"
-                    class="room-label"
-                    :class="{ 'room-label-small': room.width < 8 }"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                    @click="selectRoom(room)"
-                  >
-                    {{ room.id }}
-                  </text>
-                  
-                  <!-- Room name (for larger rooms) -->
-                  <text
-                    v-if="room.width >= 8 && room.type !== 'utility'"
-                    :x="room.x + room.width / 2"
-                    :y="room.y + room.height / 2 + 2"
-                    class="room-name"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                  >
-                    {{ room.name }}
-                  </text>
-                  
-                  <!-- Area (for larger rooms) -->
-                  <text
-                    v-if="room.area && room.width >= 10"
-                    :x="room.x + room.width / 2"
-                    :y="room.y + room.height / 2 + 5"
-                    class="room-area"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                  >
-                    {{ room.area }}m²
-                  </text>
+                  <!-- Text group clipped to room bounds -->
+                  <g :clip-path="`url(#clip-${room.id})`">
+                    <!-- Room ID -->
+                    <text
+                      :x="room.x + room.width / 2"
+                      :y="room.y + room.height / 2 - (room.height > 18 ? 3 : 0)"
+                      class="room-label"
+                      :font-size="getRoomFontSize(room)"
+                      text-anchor="middle"
+                      dominant-baseline="middle"
+                      @click="selectRoom(room)"
+                    >
+                      {{ room.id }}
+                    </text>
+                    
+                    <!-- Room name (only if room is big enough) -->
+                    <text
+                      v-if="room.width >= 16 && room.height >= 18"
+                      :x="room.x + room.width / 2"
+                      :y="room.y + room.height / 2 + 4"
+                      class="room-name"
+                      :font-size="Math.max(2, Math.min(room.width / 8, 3))"
+                      text-anchor="middle"
+                      dominant-baseline="middle"
+                    >
+                      {{ room.name }}
+                    </text>
+                  </g>
                   
                   <!-- Sensor indicators -->
                   <g v-if="getRoomSensors(room.id).length > 0">
@@ -490,9 +489,13 @@ const {
 // Local state
 const selectedFloor = ref(currentFloor.value)
 const selectedRoom = ref(null)
-const zoom = ref(1)
-const panX = ref(0)
-const panY = ref(0)
+// Default zoom to see the whole plan (1 = 100%)
+const DEFAULT_ZOOM = 1
+const DEFAULT_PAN_X = 0
+const DEFAULT_PAN_Y = 0
+const zoom = ref(DEFAULT_ZOOM)
+const panX = ref(DEFAULT_PAN_X)
+const panY = ref(DEFAULT_PAN_Y)
 const isPanning = ref(false)
 const lastPanPoint = ref({ x: 0, y: 0 })
 const draggedSensor = ref(null)
@@ -626,19 +629,28 @@ function getRoomTypeColor(type) {
   return colors[type] || 'grey'
 }
 
+// Calculate font size based on room dimensions
+function getRoomFontSize(room) {
+  // Font size proportional to the smallest dimension
+  const minDim = Math.min(room.width, room.height)
+  // Scale: small rooms get smaller text, big rooms get bigger text
+  // Clamp between 2.5 and 5
+  return Math.max(2.5, Math.min(minDim / 4, 5))
+}
+
 // Zoom & Pan
 function zoomIn() {
-  zoom.value = Math.min(zoom.value * 1.2, 3)
+  zoom.value = Math.min(zoom.value + 0.25, 3)
 }
 
 function zoomOut() {
-  zoom.value = Math.max(zoom.value / 1.2, 0.5)
+  zoom.value = Math.max(zoom.value - 0.25, 0.5)
 }
 
 function resetZoom() {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
+  zoom.value = DEFAULT_ZOOM
+  panX.value = DEFAULT_PAN_X
+  panY.value = DEFAULT_PAN_Y
 }
 
 // Disabled wheel zoom - only pan with mouse
@@ -655,8 +667,8 @@ function startPan(e) {
 
 function doPan(e) {
   if (isPanning.value) {
-    const dx = (e.clientX - lastPanPoint.value.x) / zoom.value
-    const dy = (e.clientY - lastPanPoint.value.y) / zoom.value
+    const dx = e.clientX - lastPanPoint.value.x
+    const dy = e.clientY - lastPanPoint.value.y
     panX.value += dx
     panY.value += dy
     lastPanPoint.value = { x: e.clientX, y: e.clientY }
@@ -778,26 +790,30 @@ function removeSensor(sensorId) {
   flex-direction: column;
 }
 
-.plan-container {
+.plan-scroll-wrapper {
   flex: 1;
+  min-height: 500px;
   overflow: hidden;
+  border-radius: 0 0 8px 8px;
+  position: relative;
+  cursor: grab;
+  user-select: none;
   background: 
     radial-gradient(circle at 50% 50%, rgba(var(--v-theme-primary), 0.03) 0%, transparent 70%),
     linear-gradient(rgba(var(--v-theme-surface-variant), 0.3) 1px, transparent 1px),
     linear-gradient(90deg, rgba(var(--v-theme-surface-variant), 0.3) 1px, transparent 1px);
   background-size: 100% 100%, 20px 20px, 20px 20px;
-  border-radius: 0 0 8px 8px;
-  cursor: grab;
   
   &:active {
     cursor: grabbing;
   }
 }
 
+
 .building-svg {
   width: 100%;
   height: 100%;
-  transition: transform 0.1s ease-out;
+  transform-origin: center center;
   color: rgb(var(--v-theme-on-surface));
 }
 
@@ -838,27 +854,23 @@ function removeSensor(sensorId) {
 }
 
 .room-label {
-  font-size: 1.8px;
-  font-weight: 600;
+  font-weight: 700;
   fill: currentColor;
   pointer-events: none;
   user-select: none;
-  
-  &.room-label-small {
-    font-size: 1.4px;
-  }
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .room-name {
-  font-size: 1.2px;
   fill: currentColor;
-  opacity: 0.6;
+  opacity: 0.7;
   pointer-events: none;
   user-select: none;
 }
 
 .room-area {
-  font-size: 1px;
+  font-size: 2px;
   fill: currentColor;
   opacity: 0.4;
   pointer-events: none;
