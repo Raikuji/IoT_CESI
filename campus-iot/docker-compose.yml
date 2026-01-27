@@ -62,24 +62,6 @@ services:
       - campus-network
 
   # ============================================
-  # Node-RED - Automations
-  # ============================================
-  nodered:
-    image: nodered/node-red:latest
-    container_name: campus-nodered
-    restart: unless-stopped
-    ports:
-      - "1880:1880"
-    volumes:
-      - ./nodered/data:/data
-    environment:
-      TZ: Europe/Paris
-    depends_on:
-      - mosquitto
-    networks:
-      - campus-network
-
-  # ============================================
   # Frontend - Vue 3 + Vuetify (via Nginx)
   # ============================================
   frontend:

@@ -23,8 +23,10 @@ class MQTTService:
         if reason_code == 0:
             logger.info(f"Connected to MQTT broker at {settings.mqtt_broker}:{settings.mqtt_port}")
             self.connected = True
-            # Subscribe to all sensor topics
-            topic = f"{settings.mqtt_topic_prefix}/sensors/#"
+            # Subscribe to all sensor topics from all rooms
+            # Format: campus/orion/{ROOM}/sensors/{TYPE}
+            # The + wildcard matches any room (X101, X108, NUMERILAB, etc.)
+            topic = f"{settings.mqtt_topic_prefix}/+/sensors/#"
             client.subscribe(topic)
             logger.info(f"Subscribed to {topic}")
         else:
@@ -38,7 +40,7 @@ class MQTTService:
         try:
             topic = msg.topic
             payload = msg.payload.decode('utf-8')
-            logger.debug(f"Received message on {topic}: {payload}")
+            logger.info(f"[MQTT] Received: {topic} = {payload}")
             
             # Parse the message
             try:
@@ -50,14 +52,22 @@ class MQTTService:
                 except json.JSONDecodeError:
                     value = payload
             
-            # Extract sensor type from topic
-            # Format: campus/cassiope/C101/sensors/{type}
+            # Extract room and sensor type from topic
+            # Format: campus/orion/{ROOM}/sensors/{TYPE}
+            # Example: campus/orion/X101/sensors/temperature
             parts = topic.split('/')
-            sensor_type = parts[-1] if len(parts) > 0 else "unknown"
+            if len(parts) >= 5:
+                room_id = parts[2]      # X101, X108, NUMERILAB, etc.
+                sensor_type = parts[4]  # temperature, humidity, presence
+            else:
+                room_id = "unknown"
+                sensor_type = parts[-1] if len(parts) > 0 else "unknown"
+            
+            logger.info(f"[MQTT] Room: {room_id}, Type: {sensor_type}, Value: {value}")
             
             # Call the callback if set
             if self.message_callback:
-                self.message_callback(sensor_type, value, topic)
+                self.message_callback(sensor_type, value, topic, room_id)
                 
         except Exception as e:
             logger.error(f"Error processing MQTT message: {e}")

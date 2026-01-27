@@ -47,16 +47,18 @@ class WebSocketManager:
         for conn in disconnected:
             self.disconnect(conn)
     
-    async def broadcast_sensor_data(self, sensor_type: str, value: Any, timestamp: str = None):
+    async def broadcast_sensor_data(self, sensor_type: str, value: Any, timestamp: str = None, room_id: str = None):
         """Broadcast sensor data update"""
         message = {
             "type": "sensor_data",
             "data": {
                 "sensor_type": sensor_type,
                 "value": value,
-                "timestamp": timestamp
+                "timestamp": timestamp,
+                "room_id": room_id
             }
         }
+        logger.info(f"[WS] Broadcasting: {sensor_type}={value} for room {room_id}")
         await self.broadcast(message)
     
     async def broadcast_alert(self, alert_data: Dict[str, Any]):

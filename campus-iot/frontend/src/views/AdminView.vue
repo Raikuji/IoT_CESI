@@ -1,0 +1,850 @@
+<template>
+  <div class="admin-view">
+    <!-- Hero Header -->
+    <div class="admin-hero mb-8">
+      <div class="hero-content">
+        <div class="hero-icon">
+          <v-icon size="48" color="white">mdi-shield-crown</v-icon>
+        </div>
+        <div class="hero-text">
+          <h1 class="text-h3 font-weight-black mb-2">Administration</h1>
+          <p class="text-body-1 opacity-80">
+            Gestion des utilisateurs et des accès au système IoT
+          </p>
+        </div>
+      </div>
+      <div class="hero-decoration"></div>
+    </div>
+
+    <!-- Stats Cards -->
+    <v-row class="mb-8">
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stat-card stat-total">
+          <v-card-text class="pa-6">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-value">{{ stats.total_users }}</div>
+                <div class="stat-label">Utilisateurs</div>
+              </div>
+              <div class="stat-icon">
+                <v-icon size="32">mdi-account-group</v-icon>
+              </div>
+            </div>
+            <div class="stat-trend mt-3">
+              <v-icon size="14" color="success">mdi-trending-up</v-icon>
+              <span class="text-caption ml-1">+{{ recentLoginsCount }} actifs aujourd'hui</span>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stat-card stat-active">
+          <v-card-text class="pa-6">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-value">{{ stats.active_users }}</div>
+                <div class="stat-label">Actifs</div>
+              </div>
+              <div class="stat-icon">
+                <v-icon size="32">mdi-account-check</v-icon>
+              </div>
+            </div>
+            <v-progress-linear
+              :model-value="activePercentage"
+              color="success"
+              height="6"
+              rounded
+              class="mt-3"
+            ></v-progress-linear>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stat-card stat-admins">
+          <v-card-text class="pa-6">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-value">{{ stats.role_distribution?.admin || 0 }}</div>
+                <div class="stat-label">Admins</div>
+              </div>
+              <div class="stat-icon">
+                <v-icon size="32">mdi-shield-crown</v-icon>
+              </div>
+            </div>
+            <div class="stat-badges mt-3">
+              <v-chip size="x-small" color="warning" variant="flat" class="mr-1">
+                {{ stats.role_distribution?.technician || 0 }} Tech
+              </v-chip>
+              <v-chip size="x-small" color="purple" variant="flat">
+                {{ stats.role_distribution?.manager || 0 }} Resp
+              </v-chip>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stat-card stat-inactive">
+          <v-card-text class="pa-6">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-value">{{ stats.inactive_users }}</div>
+                <div class="stat-label">Désactivés</div>
+              </div>
+              <div class="stat-icon">
+                <v-icon size="32">mdi-account-off</v-icon>
+              </div>
+            </div>
+            <div class="stat-trend mt-3" v-if="stats.inactive_users > 0">
+              <v-icon size="14" color="warning">mdi-alert</v-icon>
+              <span class="text-caption ml-1">Comptes à vérifier</span>
+            </div>
+            <div class="stat-trend mt-3" v-else>
+              <v-icon size="14" color="success">mdi-check-circle</v-icon>
+              <span class="text-caption ml-1">Tout est OK</span>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Main Content -->
+    <v-row>
+      <!-- Users Table -->
+      <v-col cols="12" lg="8">
+        <v-card class="users-card">
+          <v-card-title class="d-flex align-center pa-6 pb-4">
+            <v-icon start color="primary" size="28">mdi-account-multiple</v-icon>
+            <span class="text-h5 font-weight-bold">Utilisateurs</span>
+            <v-spacer />
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              placeholder="Rechercher..."
+              single-line
+              hide-details
+              density="compact"
+              variant="outlined"
+              class="search-field"
+              style="max-width: 280px"
+            ></v-text-field>
+          </v-card-title>
+
+          <v-divider />
+
+          <v-data-table
+            :headers="headers"
+            :items="filteredUsers"
+            :loading="loading"
+            :items-per-page="10"
+            class="users-table"
+            hover
+          >
+            <template v-slot:item.user="{ item }">
+              <div class="d-flex align-center ga-3 py-2">
+                <v-avatar :color="item.avatar_color" size="42">
+                  <span class="text-body-2 font-weight-bold text-white">
+                    {{ getInitials(item) }}
+                  </span>
+                </v-avatar>
+                <div>
+                  <div class="font-weight-semibold">{{ item.first_name }} {{ item.last_name }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ item.email }}</div>
+                </div>
+              </div>
+            </template>
+
+            <template v-slot:item.role="{ item }">
+              <v-chip
+                :color="item.role_info.color"
+                size="small"
+                variant="flat"
+                class="font-weight-medium"
+              >
+                <v-icon start size="14">{{ item.role_info.icon }}</v-icon>
+                {{ item.role_info.name }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.department="{ item }">
+              <span class="text-body-2">{{ item.department }}</span>
+            </template>
+
+            <template v-slot:item.status="{ item }">
+              <v-chip
+                :color="item.is_active ? 'success' : 'error'"
+                size="small"
+                variant="tonal"
+              >
+                <v-icon start size="12">
+                  {{ item.is_active ? 'mdi-check-circle' : 'mdi-close-circle' }}
+                </v-icon>
+                {{ item.is_active ? 'Actif' : 'Inactif' }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.last_login="{ item }">
+              <div class="text-body-2">
+                <v-icon size="14" class="mr-1" color="grey">mdi-clock-outline</v-icon>
+                {{ formatDate(item.last_login) }}
+              </div>
+            </template>
+
+            <template v-slot:item.actions="{ item }">
+              <div class="d-flex ga-1">
+                <v-btn
+                  icon
+                  variant="text"
+                  size="small"
+                  @click="openEditDialog(item)"
+                >
+                  <v-icon size="18">mdi-pencil</v-icon>
+                  <v-tooltip activator="parent" location="top">Modifier</v-tooltip>
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  size="small"
+                  @click="openRoleDialog(item)"
+                  :disabled="item.email === currentUser?.email"
+                >
+                  <v-icon size="18">mdi-shield-edit</v-icon>
+                  <v-tooltip activator="parent" location="top">Changer le rôle</v-tooltip>
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  size="small"
+                  :color="item.is_active ? 'warning' : 'success'"
+                  @click="toggleUserStatus(item)"
+                  :disabled="item.email === currentUser?.email"
+                >
+                  <v-icon size="18">
+                    {{ item.is_active ? 'mdi-account-off' : 'mdi-account-check' }}
+                  </v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    {{ item.is_active ? 'Désactiver' : 'Activer' }}
+                  </v-tooltip>
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  size="small"
+                  color="error"
+                  @click="confirmDelete(item)"
+                  :disabled="item.email === currentUser?.email"
+                >
+                  <v-icon size="18">mdi-delete</v-icon>
+                  <v-tooltip activator="parent" location="top">Supprimer</v-tooltip>
+                </v-btn>
+              </div>
+            </template>
+          </v-data-table>
+        </v-card>
+      </v-col>
+
+      <!-- Sidebar -->
+      <v-col cols="12" lg="4">
+        <!-- Roles Legend -->
+        <v-card class="roles-card mb-6">
+          <v-card-title class="d-flex align-center pa-5 pb-3">
+            <v-icon start color="primary">mdi-shield-star</v-icon>
+            <span class="font-weight-bold">Rôles & Permissions</span>
+          </v-card-title>
+          <v-divider />
+          <v-card-text class="pa-0">
+            <v-list density="comfortable" class="roles-list">
+              <v-list-item
+                v-for="(role, key) in roles"
+                :key="key"
+                class="role-item"
+              >
+                <template v-slot:prepend>
+                  <v-avatar :color="role.color" size="36">
+                    <v-icon size="18" color="white">{{ role.icon }}</v-icon>
+                  </v-avatar>
+                </template>
+                <v-list-item-title class="font-weight-semibold">
+                  {{ role.name }}
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-wrap">
+                  {{ role.description }}
+                </v-list-item-subtitle>
+                <template v-slot:append>
+                  <v-chip size="x-small" color="grey" variant="tonal">
+                    {{ stats.role_distribution?.[key] || 0 }}
+                  </v-chip>
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
+
+        <!-- Recent Activity -->
+        <v-card class="activity-card">
+          <v-card-title class="d-flex align-center pa-5 pb-3">
+            <v-icon start color="success">mdi-history</v-icon>
+            <span class="font-weight-bold">Activité récente</span>
+          </v-card-title>
+          <v-divider />
+          <v-card-text class="pa-0">
+            <v-list v-if="stats.recent_logins?.length" density="compact" class="activity-list">
+              <v-list-item
+                v-for="user in stats.recent_logins?.slice(0, 5)"
+                :key="user.id"
+                class="activity-item"
+              >
+                <template v-slot:prepend>
+                  <v-avatar :color="user.avatar_color" size="32">
+                    <span class="text-caption font-weight-bold text-white">
+                      {{ getInitials(user) }}
+                    </span>
+                  </v-avatar>
+                </template>
+                <v-list-item-title class="text-body-2">
+                  {{ user.first_name }} {{ user.last_name }}
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-caption">
+                  Connecté {{ formatRelativeTime(user.last_login) }}
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+            <div v-else class="text-center py-8 text-medium-emphasis">
+              <v-icon size="48" class="mb-2">mdi-account-clock</v-icon>
+              <p class="text-body-2">Aucune activité récente</p>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Edit User Dialog -->
+    <v-dialog v-model="editDialog.show" max-width="500">
+      <v-card class="edit-dialog">
+        <v-card-title class="d-flex align-center pa-6 pb-4">
+          <v-avatar :color="editDialog.user?.avatar_color" size="40" class="mr-3">
+            <span class="text-body-2 font-weight-bold text-white">
+              {{ getInitials(editDialog.user) }}
+            </span>
+          </v-avatar>
+          <div>
+            <div class="text-h6">Modifier l'utilisateur</div>
+            <div class="text-caption text-medium-emphasis">{{ editDialog.user?.email }}</div>
+          </div>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-6">
+          <v-text-field
+            v-model="editDialog.first_name"
+            label="Prénom"
+            variant="outlined"
+            class="mb-4"
+          ></v-text-field>
+          <v-text-field
+            v-model="editDialog.last_name"
+            label="Nom"
+            variant="outlined"
+            class="mb-4"
+          ></v-text-field>
+          <v-text-field
+            v-model="editDialog.department"
+            label="Département"
+            variant="outlined"
+          ></v-text-field>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn variant="text" @click="editDialog.show = false">Annuler</v-btn>
+          <v-btn color="primary" variant="flat" @click="saveUser" :loading="editDialog.loading">
+            <v-icon start>mdi-check</v-icon>
+            Enregistrer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Role Change Dialog -->
+    <v-dialog v-model="roleDialog.show" max-width="450">
+      <v-card class="role-dialog">
+        <v-card-title class="d-flex align-center pa-6 pb-4">
+          <v-icon start color="primary" size="28">mdi-shield-edit</v-icon>
+          <span class="text-h6">Changer le rôle</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-6">
+          <div class="text-center mb-6">
+            <v-avatar :color="roleDialog.user?.avatar_color" size="64" class="mb-3">
+              <span class="text-h6 font-weight-bold text-white">
+                {{ getInitials(roleDialog.user) }}
+              </span>
+            </v-avatar>
+            <div class="text-h6">{{ roleDialog.user?.first_name }} {{ roleDialog.user?.last_name }}</div>
+            <div class="text-caption text-medium-emphasis">{{ roleDialog.user?.email }}</div>
+          </div>
+
+          <v-item-group v-model="roleDialog.selectedRole" mandatory>
+            <v-row dense>
+              <v-col cols="12" v-for="(role, key) in roles" :key="key">
+                <v-item :value="key" v-slot="{ isSelected, toggle }">
+                  <v-card
+                    :color="isSelected ? role.color : 'surface'"
+                    :variant="isSelected ? 'flat' : 'outlined'"
+                    class="role-option pa-3"
+                    @click="toggle"
+                  >
+                    <div class="d-flex align-center">
+                      <v-avatar :color="isSelected ? 'white' : role.color" size="36" class="mr-3">
+                        <v-icon :color="isSelected ? role.color : 'white'" size="18">
+                          {{ role.icon }}
+                        </v-icon>
+                      </v-avatar>
+                      <div class="flex-grow-1">
+                        <div class="font-weight-semibold" :class="isSelected ? 'text-white' : ''">
+                          {{ role.name }}
+                        </div>
+                        <div class="text-caption" :class="isSelected ? 'text-white opacity-80' : 'text-medium-emphasis'">
+                          {{ role.description }}
+                        </div>
+                      </div>
+                      <v-icon v-if="isSelected" color="white">mdi-check-circle</v-icon>
+                    </div>
+                  </v-card>
+                </v-item>
+              </v-col>
+            </v-row>
+          </v-item-group>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn variant="text" @click="roleDialog.show = false">Annuler</v-btn>
+          <v-btn color="primary" variant="flat" @click="saveRole" :loading="roleDialog.loading">
+            <v-icon start>mdi-shield-check</v-icon>
+            Appliquer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <v-dialog v-model="deleteDialog.show" max-width="400">
+      <v-card class="delete-dialog">
+        <v-card-text class="text-center pa-8">
+          <v-avatar color="error" size="80" class="mb-4">
+            <v-icon size="48" color="white">mdi-alert</v-icon>
+          </v-avatar>
+          <h3 class="text-h5 font-weight-bold mb-2">Supprimer l'utilisateur ?</h3>
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            Êtes-vous sûr de vouloir supprimer 
+            <strong>{{ deleteDialog.user?.first_name }} {{ deleteDialog.user?.last_name }}</strong> ?
+            <br>Cette action est irréversible.
+          </p>
+          <div class="d-flex ga-3 justify-center">
+            <v-btn variant="outlined" @click="deleteDialog.show = false" size="large">
+              Annuler
+            </v-btn>
+            <v-btn color="error" variant="flat" @click="deleteUser" :loading="deleteDialog.loading" size="large">
+              <v-icon start>mdi-delete</v-icon>
+              Supprimer
+            </v-btn>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <!-- Snackbar -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000" location="top">
+      <div class="d-flex align-center">
+        <v-icon start>{{ snackbar.icon }}</v-icon>
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { storeToRefs } from 'pinia'
+import axios from 'axios'
+
+const authStore = useAuthStore()
+const { user: currentUser } = storeToRefs(authStore)
+
+const users = ref([])
+const roles = ref({})
+const stats = ref({})
+const loading = ref(false)
+const search = ref('')
+
+const headers = [
+  { title: 'Utilisateur', key: 'user', sortable: true },
+  { title: 'Rôle', key: 'role', sortable: true },
+  { title: 'Département', key: 'department', sortable: true },
+  { title: 'Statut', key: 'status', sortable: true },
+  { title: 'Dernière connexion', key: 'last_login', sortable: true },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '180px' }
+]
+
+// Dialogs
+const editDialog = ref({
+  show: false,
+  user: null,
+  first_name: '',
+  last_name: '',
+  department: '',
+  loading: false
+})
+
+const roleDialog = ref({
+  show: false,
+  user: null,
+  selectedRole: '',
+  loading: false
+})
+
+const deleteDialog = ref({
+  show: false,
+  user: null,
+  loading: false
+})
+
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success',
+  icon: 'mdi-check-circle'
+})
+
+// Computed
+const filteredUsers = computed(() => {
+  if (!search.value) return users.value
+  const s = search.value.toLowerCase()
+  return users.value.filter(u => 
+    u.first_name?.toLowerCase().includes(s) ||
+    u.last_name?.toLowerCase().includes(s) ||
+    u.email?.toLowerCase().includes(s) ||
+    u.department?.toLowerCase().includes(s)
+  )
+})
+
+const activePercentage = computed(() => {
+  if (!stats.value.total_users) return 0
+  return (stats.value.active_users / stats.value.total_users) * 100
+})
+
+const recentLoginsCount = computed(() => stats.value.recent_logins?.length || 0)
+
+// Methods
+function getInitials(user) {
+  if (!user) return ''
+  return `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase()
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—'
+  return new Date(dateStr).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return ''
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diff = Math.floor((now - date) / 1000)
+  
+  if (diff < 60) return "à l'instant"
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)}h`
+  return formatDate(dateStr)
+}
+
+function showNotification(text, type = 'success') {
+  snackbar.value = {
+    show: true,
+    text,
+    color: type,
+    icon: type === 'success' ? 'mdi-check-circle' : type === 'error' ? 'mdi-alert-circle' : 'mdi-information'
+  }
+}
+
+async function fetchData() {
+  loading.value = true
+  try {
+    const [usersRes, statsRes, rolesRes] = await Promise.all([
+      axios.get('/api/auth/users'),
+      axios.get('/api/auth/stats'),
+      axios.get('/api/auth/roles')
+    ])
+    users.value = usersRes.data
+    stats.value = statsRes.data
+    roles.value = rolesRes.data
+  } catch (e) {
+    console.error('Failed to fetch data:', e)
+    showNotification('Erreur lors du chargement', 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+function openEditDialog(user) {
+  editDialog.value = {
+    show: true,
+    user,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    department: user.department,
+    loading: false
+  }
+}
+
+async function saveUser() {
+  editDialog.value.loading = true
+  try {
+    await axios.put(`/api/auth/users/${editDialog.value.user.id}`, {
+      first_name: editDialog.value.first_name,
+      last_name: editDialog.value.last_name,
+      department: editDialog.value.department
+    })
+    await fetchData()
+    editDialog.value.show = false
+    showNotification('Utilisateur modifié avec succès')
+  } catch (e) {
+    showNotification(e.response?.data?.detail || 'Erreur', 'error')
+  } finally {
+    editDialog.value.loading = false
+  }
+}
+
+function openRoleDialog(user) {
+  roleDialog.value = {
+    show: true,
+    user,
+    selectedRole: user.role,
+    loading: false
+  }
+}
+
+async function saveRole() {
+  roleDialog.value.loading = true
+  try {
+    await axios.put(`/api/auth/users/${roleDialog.value.user.id}/role`, {
+      role: roleDialog.value.selectedRole
+    })
+    await fetchData()
+    roleDialog.value.show = false
+    showNotification('Rôle modifié avec succès')
+  } catch (e) {
+    showNotification(e.response?.data?.detail || 'Erreur', 'error')
+  } finally {
+    roleDialog.value.loading = false
+  }
+}
+
+async function toggleUserStatus(user) {
+  try {
+    await axios.put(`/api/auth/users/${user.id}`, {
+      is_active: !user.is_active
+    })
+    await fetchData()
+    showNotification(user.is_active ? 'Utilisateur désactivé' : 'Utilisateur activé')
+  } catch (e) {
+    showNotification(e.response?.data?.detail || 'Erreur', 'error')
+  }
+}
+
+function confirmDelete(user) {
+  deleteDialog.value = {
+    show: true,
+    user,
+    loading: false
+  }
+}
+
+async function deleteUser() {
+  deleteDialog.value.loading = true
+  try {
+    await axios.delete(`/api/auth/users/${deleteDialog.value.user.id}`)
+    await fetchData()
+    deleteDialog.value.show = false
+    showNotification('Utilisateur supprimé')
+  } catch (e) {
+    showNotification(e.response?.data?.detail || 'Erreur', 'error')
+  } finally {
+    deleteDialog.value.loading = false
+  }
+}
+
+onMounted(() => {
+  fetchData()
+})
+</script>
+
+<style scoped lang="scss">
+.admin-view {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+// Hero Header
+.admin-hero {
+  position: relative;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%);
+  border-radius: 24px;
+  padding: 48px;
+  overflow: hidden;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.hero-icon {
+  width: 96px;
+  height: 96px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+}
+
+.hero-text {
+  color: white;
+}
+
+.hero-decoration {
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+// Stat Cards
+.stat-card {
+  border-radius: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin-top: 4px;
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-total .stat-icon { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.stat-active .stat-icon { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.stat-admins .stat-icon { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.stat-inactive .stat-icon { background: rgba(107, 114, 128, 0.15); color: #6b7280; }
+
+.stat-trend {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+// Users Card
+.users-card {
+  border-radius: 16px;
+}
+
+.search-field {
+  :deep(.v-field) {
+    border-radius: 12px;
+  }
+}
+
+.users-table {
+  :deep(th) {
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.5px;
+  }
+}
+
+// Roles Card
+.roles-card {
+  border-radius: 16px;
+}
+
+.roles-list {
+  .role-item {
+    border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.05);
+    
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+// Activity Card
+.activity-card {
+  border-radius: 16px;
+}
+
+.activity-list {
+  .activity-item {
+    border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.05);
+    
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+// Dialogs
+.edit-dialog,
+.role-dialog,
+.delete-dialog {
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.role-option {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 12px !important;
+  
+  &:hover {
+    transform: scale(1.02);
+  }
+}
+</style>

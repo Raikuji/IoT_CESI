@@ -9,7 +9,7 @@ from typing import Optional, List
 class SensorBase(BaseModel):
     name: str
     type: str
-    location: Optional[str] = "C101"
+    location: Optional[str] = None
     unit: Optional[str] = None
 
 

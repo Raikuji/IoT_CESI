@@ -9,7 +9,7 @@ from typing import Optional
 class ActuatorBase(BaseModel):
     name: str
     type: str
-    location: Optional[str] = "C101"
+    location: Optional[str] = None
 
 
 class ActuatorCreate(ActuatorBase):

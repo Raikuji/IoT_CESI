@@ -13,7 +13,7 @@ class Actuator(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     type = Column(String(50), nullable=False)
-    location = Column(String(100), default="C101")
+    location = Column(String(100), nullable=True)
     current_value = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

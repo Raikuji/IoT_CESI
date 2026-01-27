@@ -18,7 +18,8 @@ from api import (
     alerts_router,
     actuators_router,
     dashboard_router,
-    auth_router
+    auth_router,
+    activity_router
 )
 
 # Configure logging
@@ -29,17 +30,40 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def handle_mqtt_message(sensor_type: str, value, topic: str):
+def handle_mqtt_message(sensor_type: str, value, topic: str, room_id: str = "unknown"):
     """Handle incoming MQTT messages and store in database"""
     try:
         db = SessionLocal()
         
-        # Find or create sensor
-        sensor = db.query(Sensor).filter(Sensor.type == sensor_type).first()
+        logger.info(f"[HANDLER] Processing: room={room_id}, type={sensor_type}, value={value}")
+        
+        # Find or create sensor based on type and room
+        sensor = db.query(Sensor).filter(
+            Sensor.type == sensor_type,
+            Sensor.location == room_id
+        ).first()
+        
+        # If no sensor for this room, try to find by type only
         if not sensor:
-            logger.warning(f"Unknown sensor type: {sensor_type}")
-            db.close()
-            return
+            sensor = db.query(Sensor).filter(Sensor.type == sensor_type).first()
+        
+        if not sensor:
+            # Auto-create sensor if it doesn't exist
+            logger.info(f"Creating new sensor: {sensor_type} in {room_id}")
+            sensor = Sensor(
+                name=f"{sensor_type.capitalize()} {room_id}",
+                type=sensor_type,
+                location=room_id,
+                status="online"
+            )
+            db.add(sensor)
+            db.commit()
+            db.refresh(sensor)
+        else:
+            # Update sensor status and location
+            sensor.status = "online"
+            sensor.location = room_id
+            db.commit()
         
         # Store data point
         data_point = SensorData(
@@ -72,7 +96,7 @@ def handle_mqtt_message(sensor_type: str, value, topic: str):
                 alert = Alert(
                     sensor_id=sensor.id,
                     type=f"{sensor_type}_threshold",
-                    message=rule.message or f"{sensor.name} threshold exceeded",
+                    message=rule.message or f"{sensor.name} threshold exceeded in {room_id}",
                     severity=rule.severity
                 )
                 db.add(alert)
@@ -83,6 +107,7 @@ def handle_mqtt_message(sensor_type: str, value, topic: str):
                 asyncio.create_task(ws_manager.broadcast_alert({
                     "id": alert.id,
                     "sensor_id": sensor.id,
+                    "room_id": room_id,
                     "type": alert.type,
                     "message": alert.message,
                     "severity": alert.severity,
@@ -91,12 +116,12 @@ def handle_mqtt_message(sensor_type: str, value, topic: str):
         
         db.close()
         
-        # Broadcast sensor data via WebSocket
+        # Broadcast sensor data via WebSocket (includes room info)
         asyncio.create_task(ws_manager.broadcast_sensor_data(
-            sensor_type, value, datetime.utcnow().isoformat()
+            sensor_type, value, datetime.utcnow().isoformat(), room_id
         ))
         
-        logger.debug(f"Stored {sensor_type}: {value}")
+        logger.info(f"[HANDLER] Stored and broadcast: {sensor_type}={value} for {room_id}")
         
     except Exception as e:
         logger.error(f"Error handling MQTT message: {e}")
@@ -142,6 +167,7 @@ app.include_router(alerts_router, prefix="/api")
 app.include_router(actuators_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(activity_router, prefix="/api")
 
 
 @app.get("/")

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS sensors (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50) NOT NULL,
-    location VARCHAR(100) DEFAULT 'C101',
+    location VARCHAR(100),
     unit VARCHAR(20),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS actuators (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50) NOT NULL,
-    location VARCHAR(100) DEFAULT 'C101',
+    location VARCHAR(100),
     current_value INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -89,18 +89,17 @@ CREATE TABLE IF NOT EXISTS system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default sensors
+-- Insert default sensors (location will be set via MQTT or web app)
 INSERT INTO sensors (name, type, location, unit) VALUES
-    ('BME280 Temperature', 'temperature', 'C101', '°C'),
-    ('BME280 Humidity', 'humidity', 'C101', '%'),
-    ('BME280 Pressure', 'pressure', 'C101', 'hPa'),
-    ('HC-SR04 Presence', 'presence', 'C101 Door', 'bool'),
-    ('CO2 Sensor', 'co2', 'C101', 'ppm')
+    ('BME280 Temperature', 'temperature', NULL, '°C'),
+    ('BME280 Humidity', 'humidity', NULL, '%'),
+    ('HC-SR04 Presence', 'presence', NULL, 'bool')
 ON CONFLICT DO NOTHING;
 
--- Insert default actuators
+-- Insert default actuators (location will be set via web app)
 INSERT INTO actuators (name, type, location, current_value) VALUES
-    ('Heating Servo', 'servo', 'C101', 0)
+    ('Motor Servo', 'servo', NULL, 0),
+    ('Speaker Alert', 'speaker', NULL, 0)
 ON CONFLICT DO NOTHING;
 
 -- Insert default alert rules
