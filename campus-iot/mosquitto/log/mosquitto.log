@@ -1208,3 +1208,12 @@
 1769527423: Sending SUBACK to auto-1726A73C-9A78-1D90-F8B7-28D98E5270B9
 1769527441: Received DISCONNECT from auto-1726A73C-9A78-1D90-F8B7-28D98E5270B9
 1769527441: Client auto-1726A73C-9A78-1D90-F8B7-28D98E5270B9 disconnected.
+1769529123: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1769529328: mosquitto version 2.0.22 terminating
+1769529328: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1769529338: mosquitto version 2.0.22 starting
+1769529338: Config loaded from /mosquitto/config/mosquitto.conf.
+1769529338: Opening ipv4 listen socket on port 1883.
+1769529338: Opening ipv6 listen socket on port 1883.
+1769529338: Opening websockets listen socket on port 9001.
+1769529338: mosquitto version 2.0.22 running
