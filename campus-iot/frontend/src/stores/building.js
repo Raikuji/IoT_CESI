@@ -18,7 +18,7 @@ export const useBuildingStore = defineStore('building', () => {
   const rooms = ref([
     // ============ RDC - Rez-de-chaussée ============
     // Côté NORD (haut du plan) - de gauche à droite
-    { id: 'X001', name: 'Accueil CESI', floor: 'RDC', x: 4, y: 8, width: 20, height: 28, type: 'common', capacity: 10, area: 29 },
+    { id: 'X001', name: 'Accueil CESI', floor: 'RDC', x: 4, y: 8, width: 20, height: 22, type: 'common', capacity: 10, area: 29 },
     { id: 'X002', name: 'Bureau', floor: 'RDC', x: 26, y: 8, width: 16, height: 22, type: 'office', capacity: 4, area: 19 },
     { id: 'X003', name: 'Salle', floor: 'RDC', x: 44, y: 8, width: 20, height: 22, type: 'classroom', capacity: 15, area: 34 },
     { id: 'X004', name: 'Bureau', floor: 'RDC', x: 66, y: 8, width: 16, height: 22, type: 'office', capacity: 4, area: 12 },
@@ -27,25 +27,25 @@ export const useBuildingStore = defineStore('building', () => {
     { id: 'X007', name: 'Salle 03', floor: 'RDC', x: 128, y: 8, width: 24, height: 22, type: 'classroom', capacity: 20, area: 38 },
     
     // Côté SUD (bas du plan) - de gauche à droite
-    { id: 'HALL_CESI', name: 'Hall CESI', floor: 'RDC', x: 4, y: 38, width: 16, height: 28, type: 'common', capacity: 20, area: 20 },
-    { id: 'SAS', name: 'SAS', floor: 'RDC', x: 4, y: 68, width: 12, height: 18, type: 'common', capacity: 5, area: 13 },
-    { id: 'ASC_RDC', name: 'Asc', floor: 'RDC', x: 22, y: 60, width: 10, height: 14, type: 'utility', capacity: 0, area: 5 },
-    { id: 'X010', name: 'Elec', floor: 'RDC', x: 34, y: 55, width: 12, height: 18, type: 'utility', capacity: 0, area: 8 },
-    { id: 'CTA', name: 'CTA', floor: 'RDC', x: 48, y: 60, width: 16, height: 22, type: 'utility', capacity: 0, area: 18 },
-    { id: 'LOCAL_TECH', name: 'Local Tech', floor: 'RDC', x: 66, y: 60, width: 18, height: 22, type: 'utility', capacity: 0, area: 18 },
-    { id: 'REPO_RDC', name: 'Repro', floor: 'RDC', x: 86, y: 60, width: 12, height: 16, type: 'utility', capacity: 2, area: 8 },
-    { id: 'WCF_RDC', name: 'WC F', floor: 'RDC', x: 100, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 10 },
-    { id: 'WCH_RDC', name: 'WC H', floor: 'RDC', x: 114, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 13 },
-    { id: 'RGT', name: 'Rgt', floor: 'RDC', x: 128, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 6 },
-    { id: 'X009', name: 'Rangement', floor: 'RDC', x: 142, y: 60, width: 16, height: 22, type: 'utility', capacity: 0, area: 26 },
-    { id: 'X008', name: 'Détente élèves', floor: 'RDC', x: 160, y: 55, width: 34, height: 28, type: 'common', capacity: 30, area: 43 },
+    { id: 'HALL_CESI', name: 'Hall CESI', floor: 'RDC', x: 4, y: 32, width: 20, height: 22, type: 'common', capacity: 20, area: 20 },
+    { id: 'SAS', name: 'SAS', floor: 'RDC', x: 4, y: 56, width: 12, height: 18, type: 'common', capacity: 5, area: 13 },
+    { id: 'ASC_RDC', name: 'Asc', floor: 'RDC', x: 18, y: 56, width: 10, height: 14, type: 'utility', capacity: 0, area: 5 },
+    { id: 'X010', name: 'Elec', floor: 'RDC', x: 30, y: 56, width: 12, height: 18, type: 'utility', capacity: 0, area: 8 },
+    { id: 'CTA', name: 'CTA', floor: 'RDC', x: 44, y: 56, width: 16, height: 22, type: 'utility', capacity: 0, area: 18 },
+    { id: 'LOCAL_TECH', name: 'Local Tech', floor: 'RDC', x: 62, y: 56, width: 18, height: 22, type: 'utility', capacity: 0, area: 18 },
+    { id: 'REPO_RDC', name: 'Repro', floor: 'RDC', x: 82, y: 56, width: 12, height: 16, type: 'utility', capacity: 2, area: 8 },
+    { id: 'WCF_RDC', name: 'WC F', floor: 'RDC', x: 96, y: 56, width: 12, height: 16, type: 'utility', capacity: 0, area: 10 },
+    { id: 'WCH_RDC', name: 'WC H', floor: 'RDC', x: 110, y: 56, width: 12, height: 16, type: 'utility', capacity: 0, area: 13 },
+    { id: 'RGT', name: 'Rgt', floor: 'RDC', x: 124, y: 56, width: 12, height: 16, type: 'utility', capacity: 0, area: 6 },
+    { id: 'X009', name: 'Rangement', floor: 'RDC', x: 138, y: 56, width: 16, height: 22, type: 'utility', capacity: 0, area: 26 },
+    { id: 'X008', name: 'Détente élèves', floor: 'RDC', x: 156, y: 56, width: 38, height: 26, type: 'common', capacity: 30, area: 43 },
     
-    // Couloir central RDC
-    { id: 'HALL_RDC', name: 'Couloir', floor: 'RDC', x: 22, y: 32, width: 172, height: 22, type: 'common', capacity: 50, area: 200 },
+    // Couloir central RDC (aligné avec Hall CESI)
+    { id: 'HALL_RDC', name: 'Couloir', floor: 'RDC', x: 26, y: 32, width: 168, height: 22, type: 'common', capacity: 50, area: 200 },
 
     // ============ R+1 - Premier étage ============
     // Côté NORD (haut du plan) - de gauche à droite
-    { id: 'X101', name: 'Open Space', floor: 'R+1', x: 4, y: 8, width: 24, height: 38, type: 'office', capacity: 40, area: 111 },
+    { id: 'X101', name: 'Open Space', floor: 'R+1', x: 4, y: 8, width: 24, height: 48, type: 'office', capacity: 40, area: 111 },
     { id: 'X102', name: 'Réunion', floor: 'R+1', x: 30, y: 8, width: 16, height: 22, type: 'meeting', capacity: 10, area: 20 },
     { id: 'X103', name: 'Bureau', floor: 'R+1', x: 48, y: 8, width: 14, height: 22, type: 'office', capacity: 4, area: 19 },
     { id: 'X104', name: 'Bureau', floor: 'R+1', x: 64, y: 8, width: 14, height: 22, type: 'office', capacity: 4, area: 19 },
@@ -71,7 +71,7 @@ export const useBuildingStore = defineStore('building', () => {
 
     // ============ R+2 - Deuxième étage ============
     // Côté NORD (haut du plan) - de gauche à droite
-    { id: 'X201', name: 'Open Space', floor: 'R+2', x: 4, y: 8, width: 24, height: 38, type: 'office', capacity: 40, area: 109 },
+    { id: 'X201', name: 'Open Space', floor: 'R+2', x: 4, y: 8, width: 24, height: 48, type: 'office', capacity: 40, area: 109 },
     { id: 'X202', name: 'Salle', floor: 'R+2', x: 30, y: 8, width: 16, height: 22, type: 'classroom', capacity: 12, area: 28 },
     { id: 'X203', name: 'Soutenance', floor: 'R+2', x: 48, y: 8, width: 14, height: 22, type: 'meeting', capacity: 6, area: 13 },
     { id: 'X204', name: 'Soutenance', floor: 'R+2', x: 64, y: 8, width: 14, height: 22, type: 'meeting', capacity: 6, area: 13 },
@@ -90,7 +90,7 @@ export const useBuildingStore = defineStore('building', () => {
     { id: 'WCFA', name: 'WC F', floor: 'R+2', x: 104, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 13 },
     { id: 'WCF2', name: 'WC F', floor: 'R+2', x: 118, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 16 },
     { id: 'WCH2', name: 'WC H', floor: 'R+2', x: 132, y: 60, width: 12, height: 16, type: 'utility', capacity: 0, area: 16 },
-    { id: 'OPENSPACE2', name: 'Open Space', floor: 'R+2', x: 176, y: 8, width: 18, height: 38, type: 'office', capacity: 35, area: 98 },
+    { id: 'OPENSPACE2', name: 'Open Space', floor: 'R+2', x: 148, y: 58, width: 24, height: 24, type: 'office', capacity: 35, area: 98 },
     
     // Couloir central R+2
     { id: 'HALL2', name: 'Couloir', floor: 'R+2', x: 30, y: 32, width: 164, height: 24, type: 'common', capacity: 50, area: 200 }

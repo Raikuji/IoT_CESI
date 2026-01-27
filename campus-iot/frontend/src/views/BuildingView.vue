@@ -213,13 +213,6 @@
                   </g>
                 </g>
                 
-                <!-- Stairs/Elevator symbol -->
-                <g v-if="selectedFloor === 'R+1'" transform="translate(17, 56)">
-                  <rect x="0" y="0" width="3" height="8" fill="none" stroke="currentColor" stroke-width="0.2" opacity="0.3"/>
-                  <line x1="0.5" y1="2" x2="2.5" y2="2" stroke="currentColor" stroke-width="0.15" opacity="0.3"/>
-                  <line x1="0.5" y1="4" x2="2.5" y2="4" stroke="currentColor" stroke-width="0.15" opacity="0.3"/>
-                  <line x1="0.5" y1="6" x2="2.5" y2="6" stroke="currentColor" stroke-width="0.15" opacity="0.3"/>
-                </g>
               </svg>
             </div>
           </v-card-text>
