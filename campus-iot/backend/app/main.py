@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from db import get_db, SessionLocal
 from models import Sensor, SensorData, Alert, AlertRule
+from models.settings import PlacedSensor
 from services import mqtt_service, ws_manager
 from api import (
     sensors_router,
@@ -68,12 +69,56 @@ def handle_mqtt_message(sensor_type: str, value, topic: str, room_id: str = "unk
             db.add(sensor)
             db.commit()
             db.refresh(sensor)
+            
+            # Also create a PlacedSensor for 3D visualization if room is known
+            if room_id != "unknown":
+                existing_placed = db.query(PlacedSensor).filter(
+                    PlacedSensor.room_id == room_id,
+                    PlacedSensor.sensor_type == sensor_type
+                ).first()
+                
+                if not existing_placed:
+                    placed_sensor = PlacedSensor(
+                        room_id=room_id,
+                        sensor_type=sensor_type,
+                        position_x=0.5,  # Center of room
+                        position_y=0.5,
+                        name=f"{sensor_type.capitalize()} {room_id}",
+                        current_value=float(value) if isinstance(value, (int, float, str)) else None,
+                        status="ok"
+                    )
+                    db.add(placed_sensor)
+                    db.commit()
+                    logger.info(f"Created PlacedSensor for 3D: {sensor_type} in {room_id}")
         else:
             # Update sensor - ALWAYS update location if room is provided in payload
             sensor.is_active = True
             if room_id != "unknown":
                 sensor.location = room_id
                 sensor.name = f"{sensor_type.capitalize()} {room_id}"
+                
+                # Also update or create PlacedSensor
+                placed_sensor = db.query(PlacedSensor).filter(
+                    PlacedSensor.room_id == room_id,
+                    PlacedSensor.sensor_type == sensor_type
+                ).first()
+                
+                if placed_sensor:
+                    placed_sensor.current_value = float(value) if isinstance(value, (int, float, str)) else None
+                    placed_sensor.status = "ok"
+                    placed_sensor.last_update = datetime.utcnow()
+                else:
+                    placed_sensor = PlacedSensor(
+                        room_id=room_id,
+                        sensor_type=sensor_type,
+                        position_x=0.5,
+                        position_y=0.5,
+                        name=f"{sensor_type.capitalize()} {room_id}",
+                        current_value=float(value) if isinstance(value, (int, float, str)) else None,
+                        status="ok"
+                    )
+                    db.add(placed_sensor)
+                    logger.info(f"Created PlacedSensor for 3D: {sensor_type} in {room_id}")
             db.commit()
         
         # Store data point

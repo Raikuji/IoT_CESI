@@ -202,16 +202,6 @@
                     {{ formatSensorValue(sensor) }}
                   </span>
                 </div>
-                <v-btn
-                  icon
-                  variant="text"
-                  size="x-small"
-                  color="error"
-                  class="delete-btn"
-                  @click.stop="removeSensor(sensor.id)"
-                >
-                  <v-icon size="16">mdi-delete</v-icon>
-                </v-btn>
               </div>
             </div>
             
