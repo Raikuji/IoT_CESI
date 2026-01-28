@@ -1,8 +1,6 @@
 -- Campus IoT Database Initialization
 -- ====================================
-
--- Enable TimescaleDB extension
-CREATE EXTENSION IF NOT EXISTS timescaledb;
+-- Compatible with Supabase (standard PostgreSQL, no TimescaleDB)
 
 -- Sensors table
 CREATE TABLE IF NOT EXISTS sensors (
@@ -10,25 +8,24 @@ CREATE TABLE IF NOT EXISTS sensors (
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50) NOT NULL,
     location VARCHAR(100),
+    room_id VARCHAR(50),
     unit VARCHAR(20),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Sensor data (hypertable for time-series)
+-- Sensor data (standard table for time-series)
 CREATE TABLE IF NOT EXISTS sensor_data (
-    time TIMESTAMPTZ NOT NULL,
-    sensor_id INTEGER REFERENCES sensors(id),
+    id SERIAL PRIMARY KEY,
+    time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sensor_id INTEGER REFERENCES sensors(id) ON DELETE CASCADE,
     value DOUBLE PRECISION NOT NULL
 );
-
--- Convert to hypertable (TimescaleDB)
-SELECT create_hypertable('sensor_data', 'time', if_not_exists => TRUE);
 
 -- Alerts table
 CREATE TABLE IF NOT EXISTS alerts (
     id SERIAL PRIMARY KEY,
-    sensor_id INTEGER REFERENCES sensors(id),
+    sensor_id INTEGER REFERENCES sensors(id) ON DELETE SET NULL,
     type VARCHAR(50) NOT NULL,
     message TEXT,
     severity VARCHAR(20) DEFAULT 'warning',
@@ -40,7 +37,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 -- Alert rules table
 CREATE TABLE IF NOT EXISTS alert_rules (
     id SERIAL PRIMARY KEY,
-    sensor_id INTEGER REFERENCES sensors(id),
+    sensor_id INTEGER REFERENCES sensors(id) ON DELETE CASCADE,
     condition VARCHAR(20) NOT NULL,
     threshold DOUBLE PRECISION NOT NULL,
     message TEXT,
@@ -55,6 +52,7 @@ CREATE TABLE IF NOT EXISTS actuators (
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50) NOT NULL,
     location VARCHAR(100),
+    room_id VARCHAR(50),
     current_value INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -63,20 +61,35 @@ CREATE TABLE IF NOT EXISTS actuators (
 -- Actuator commands log
 CREATE TABLE IF NOT EXISTS actuator_commands (
     id SERIAL PRIMARY KEY,
-    actuator_id INTEGER REFERENCES actuators(id),
+    actuator_id INTEGER REFERENCES actuators(id) ON DELETE CASCADE,
     command_value INTEGER NOT NULL,
     source VARCHAR(50) DEFAULT 'manual',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Users table (for auth)
+-- Users table (for authentication)
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
     role VARCHAR(20) DEFAULT 'user',
+    department VARCHAR(100) DEFAULT 'CESI Nancy',
+    avatar_color VARCHAR(20) DEFAULT '#3b82f6',
     is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login TIMESTAMPTZ
+);
+
+-- Activity logs
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    user_email VARCHAR(255),
+    action VARCHAR(100) NOT NULL,
+    details TEXT,
+    ip_address VARCHAR(45),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -89,23 +102,10 @@ CREATE TABLE IF NOT EXISTS system_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- No default sensors - they will be auto-created when MQTT data arrives
--- or manually added via the web app
-
--- No default actuators - they will be added via the web app
-
--- No default alert rules - they will be configured via the web app
-
--- Create indexes for performance
-CREATE INDEX IF NOT EXISTS idx_sensor_data_time ON sensor_data (time DESC);
-CREATE INDEX IF NOT EXISTS idx_sensor_data_sensor ON sensor_data (sensor_id);
-CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alerts (is_acknowledged);
-
 -- Blockchain table (for data integrity)
 CREATE TABLE IF NOT EXISTS blockchain (
     id SERIAL PRIMARY KEY,
-    index INTEGER UNIQUE NOT NULL,
+    block_index INTEGER UNIQUE NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     sensor_type VARCHAR(50),
     sensor_value VARCHAR(100),
@@ -131,13 +131,39 @@ CREATE TABLE IF NOT EXISTS security_alerts (
     resolved_by VARCHAR(100)
 );
 
--- Indexes for blockchain
-CREATE INDEX IF NOT EXISTS idx_blockchain_index ON blockchain (index);
+-- Reports table (for QR code issue reporting)
+CREATE TABLE IF NOT EXISTS reports (
+    id SERIAL PRIMARY KEY,
+    room_id VARCHAR(50) NOT NULL,
+    report_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) DEFAULT 'medium',
+    description TEXT,
+    reported_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reported_by_email VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'open',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ,
+    resolved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    resolved_by_email VARCHAR(255)
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_sensor_data_time ON sensor_data (time DESC);
+CREATE INDEX IF NOT EXISTS idx_sensor_data_sensor ON sensor_data (sensor_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alerts (is_acknowledged);
+CREATE INDEX IF NOT EXISTS idx_blockchain_index ON blockchain (block_index);
 CREATE INDEX IF NOT EXISTS idx_blockchain_hash ON blockchain (hash);
 CREATE INDEX IF NOT EXISTS idx_security_alerts_timestamp ON security_alerts (timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_security_alerts_resolved ON security_alerts (resolved);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_room ON reports (room_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status);
 
 -- Default admin user (password: admin123)
-INSERT INTO users (username, email, hashed_password, role) VALUES
-    ('admin', 'admin@campus.cesi.fr', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G8xvGqJ4x8Kqwi', 'admin')
-ON CONFLICT DO NOTHING;
+-- Hash generated with bcrypt
+INSERT INTO users (email, hashed_password, first_name, last_name, role, department, avatar_color) VALUES
+    ('theo.pellizzari@viacesi.fr', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G8xvGqJ4x8Kqwi', 'Theo', 'Pellizzari', 'admin', 'Informatique', '#ef4444')
+ON CONFLICT (email) DO NOTHING;

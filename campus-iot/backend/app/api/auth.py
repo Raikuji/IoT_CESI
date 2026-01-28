@@ -1,11 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""
+Authentication API - Connected to Supabase PostgreSQL
+"""
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import jwt
 import os
+import random
+
+from db.database import get_db
+from models.user import User, ActivityLog
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -17,7 +25,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# Role definitions for IoT Campus context
+# Role definitions
 ROLES = {
     "admin": {
         "name": "Administrateur",
@@ -56,24 +64,6 @@ ROLES = {
     }
 }
 
-# In-memory user storage (replace with database in production)
-users_db = {
-    "theo.pellizzari@viacesi.fr": {
-        "id": 1,
-        "email": "theo.pellizzari@viacesi.fr",
-        "first_name": "Theo",
-        "last_name": "Pellizzari",
-        "hashed_password": pwd_context.hash("admin123"),
-        "role": "admin",
-        "department": "Informatique",
-        "avatar_color": "#ef4444",
-        "created_at": datetime.utcnow().isoformat(),
-        "last_login": datetime.utcnow().isoformat(),
-        "is_active": True
-    }
-}
-user_id_counter = 2
-
 
 # Pydantic models
 class UserCreate(BaseModel):
@@ -101,6 +91,9 @@ class UserResponse(BaseModel):
     created_at: str
     last_login: Optional[str]
     is_active: bool
+
+    class Config:
+        from_attributes = True
 
 
 class TokenResponse(BaseModel):
@@ -142,17 +135,45 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_user_by_email(email: str) -> Optional[dict]:
-    return users_db.get(email)
-
-
 def get_random_color() -> str:
-    import random
     colors = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899", "#06b6d4"]
     return random.choice(colors)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+def user_to_response(user: User) -> UserResponse:
+    role = user.role or "user"
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name or "",
+        last_name=user.last_name or "",
+        role=role,
+        role_info=ROLES.get(role, ROLES["user"]),
+        department=user.department or "CESI Nancy",
+        avatar_color=user.avatar_color or "#3b82f6",
+        created_at=user.created_at.isoformat() if user.created_at else datetime.utcnow().isoformat(),
+        last_login=user.last_login.isoformat() if user.last_login else None,
+        is_active=user.is_active if user.is_active is not None else True
+    )
+
+
+def log_activity(db: Session, user_id: int, user_email: str, action: str, details: str = None, ip: str = None):
+    """Log user activity to database"""
+    try:
+        log = ActivityLog(
+            user_id=user_id,
+            user_email=user_email,
+            action=action,
+            details=details,
+            ip_address=ip
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to log activity: {e}")
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -166,36 +187,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except jwt.PyJWTError:
         raise credentials_exception
     
-    user = get_user_by_email(email)
+    user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
     return user
 
 
-async def get_current_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user.get("role") != "admin":
+async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
         )
     return current_user
-
-
-def user_to_response(user: dict) -> UserResponse:
-    role = user.get("role", "user")
-    return UserResponse(
-        id=user["id"],
-        email=user["email"],
-        first_name=user["first_name"],
-        last_name=user["last_name"],
-        role=role,
-        role_info=ROLES.get(role, ROLES["user"]),
-        department=user.get("department", "CESI Nancy"),
-        avatar_color=user.get("avatar_color", "#3b82f6"),
-        created_at=user["created_at"],
-        last_login=user.get("last_login"),
-        is_active=user.get("is_active", True)
-    )
 
 
 # Routes
@@ -206,10 +210,10 @@ async def get_roles():
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
-    global user_id_counter
-    
-    if get_user_by_email(user_data.email):
+async def register(user_data: UserCreate, request: Request, db: Session = Depends(get_db)):
+    # Check if email exists
+    existing = db.query(User).filter(User.email == user_data.email).first()
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -218,22 +222,26 @@ async def register(user_data: UserCreate):
     # Determine role (admin for specific emails)
     role = "admin" if user_data.email == "theo.pellizzari@viacesi.fr" else "user"
     
-    new_user = {
-        "id": user_id_counter,
-        "email": user_data.email,
-        "first_name": user_data.first_name,
-        "last_name": user_data.last_name,
-        "hashed_password": get_password_hash(user_data.password),
-        "role": role,
-        "department": user_data.department or "CESI Nancy",
-        "avatar_color": get_random_color(),
-        "created_at": datetime.utcnow().isoformat(),
-        "last_login": datetime.utcnow().isoformat(),
-        "is_active": True
-    }
+    # Create user
+    new_user = User(
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        first_name=user_data.first_name,
+        last_name=user_data.last_name,
+        role=role,
+        department=user_data.department or "CESI Nancy",
+        avatar_color=get_random_color(),
+        is_active=True,
+        last_login=datetime.utcnow()
+    )
     
-    users_db[user_data.email] = new_user
-    user_id_counter += 1
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Log activity
+    client_ip = request.client.host if request.client else None
+    log_activity(db, new_user.id, new_user.email, "register", "New user registration", client_ip)
     
     access_token = create_access_token(data={"sub": user_data.email})
     
@@ -244,25 +252,30 @@ async def register(user_data: UserCreate):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(user_data: UserLogin):
-    user = get_user_by_email(user_data.email)
+async def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == user_data.email).first()
     
-    if not user or not verify_password(user_data.password, user["hashed_password"]):
+    if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect"
         )
     
-    if not user.get("is_active", True):
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Compte désactivé. Contactez un administrateur."
         )
     
     # Update last login
-    user["last_login"] = datetime.utcnow().isoformat()
+    user.last_login = datetime.utcnow()
+    db.commit()
     
-    access_token = create_access_token(data={"sub": user["email"]})
+    # Log activity
+    client_ip = request.client.host if request.client else None
+    log_activity(db, user.id, user.email, "login", "User login", client_ip)
+    
+    access_token = create_access_token(data={"sub": user.email})
     
     return TokenResponse(
         access_token=access_token,
@@ -271,89 +284,93 @@ async def login(user_data: UserLogin):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
+async def get_me(current_user: User = Depends(get_current_user)):
     return user_to_response(current_user)
 
 
 @router.put("/profile", response_model=UserResponse)
 async def update_profile(
     data: UserUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    user = users_db.get(current_user["email"])
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
     if data.first_name:
-        user["first_name"] = data.first_name
+        current_user.first_name = data.first_name
     if data.last_name:
-        user["last_name"] = data.last_name
+        current_user.last_name = data.last_name
     if data.department:
-        user["department"] = data.department
+        current_user.department = data.department
     if data.avatar_color:
-        user["avatar_color"] = data.avatar_color
+        current_user.avatar_color = data.avatar_color
     
-    return user_to_response(user)
+    db.commit()
+    db.refresh(current_user)
+    
+    log_activity(db, current_user.id, current_user.email, "profile_update", "Profile updated")
+    
+    return user_to_response(current_user)
 
 
 @router.put("/password")
 async def change_password(
     data: PasswordChange,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    user = users_db.get(current_user["email"])
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
     # Verify current password
-    if not verify_password(data.current_password, user["hashed_password"]):
+    if not verify_password(data.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Mot de passe actuel incorrect")
     
     # Update password
-    user["hashed_password"] = get_password_hash(data.new_password)
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    
+    log_activity(db, current_user.id, current_user.email, "password_change", "Password changed")
     
     return {"success": True, "message": "Mot de passe modifié avec succès"}
 
 
 # Admin routes
 @router.get("/users", response_model=List[UserResponse])
-async def get_all_users(current_user: dict = Depends(get_current_admin)):
-    return [user_to_response(u) for u in users_db.values()]
+async def get_all_users(current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [user_to_response(u) for u in users]
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, current_user: dict = Depends(get_current_admin)):
-    for user in users_db.values():
-        if user["id"] == user_id:
-            return user_to_response(user)
-    raise HTTPException(status_code=404, detail="User not found")
+async def get_user(user_id: int, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user_to_response(user)
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
     data: UserUpdate,
-    current_user: dict = Depends(get_current_admin)
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
-    target_user = None
-    for user in users_db.values():
-        if user["id"] == user_id:
-            target_user = user
-            break
-    
+    target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
     if data.first_name is not None:
-        target_user["first_name"] = data.first_name
+        target_user.first_name = data.first_name
     if data.last_name is not None:
-        target_user["last_name"] = data.last_name
+        target_user.last_name = data.last_name
     if data.department is not None:
-        target_user["department"] = data.department
+        target_user.department = data.department
     if data.is_active is not None:
-        if target_user["email"] == current_user["email"]:
+        if target_user.id == current_user.id:
             raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
-        target_user["is_active"] = data.is_active
+        target_user.is_active = data.is_active
+    
+    db.commit()
+    db.refresh(target_user)
+    
+    log_activity(db, current_user.id, current_user.email, "admin_update_user", f"Updated user {target_user.email}")
     
     return user_to_response(target_user)
 
@@ -362,71 +379,69 @@ async def update_user(
 async def update_user_role(
     user_id: int,
     role_data: RoleUpdate,
-    current_user: dict = Depends(get_current_admin)
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
-    target_user = None
-    for user in users_db.values():
-        if user["id"] == user_id:
-            target_user = user
-            break
-    
+    target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    if target_user["email"] == current_user["email"]:
+    if target_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
     
     if role_data.role not in ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {list(ROLES.keys())}")
     
-    target_user["role"] = role_data.role
+    target_user.role = role_data.role
+    db.commit()
+    db.refresh(target_user)
+    
+    log_activity(db, current_user.id, current_user.email, "admin_change_role", f"Changed {target_user.email} role to {role_data.role}")
+    
     return {"success": True, "user": user_to_response(target_user)}
 
 
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
-    current_user: dict = Depends(get_current_admin)
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
 ):
-    target_email = None
-    for email, user in users_db.items():
-        if user["id"] == user_id:
-            target_email = email
-            break
-    
-    if not target_email:
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    if target_email == current_user["email"]:
+    if target_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
-    del users_db[target_email]
+    email = target_user.email
+    db.delete(target_user)
+    db.commit()
+    
+    log_activity(db, current_user.id, current_user.email, "admin_delete_user", f"Deleted user {email}")
+    
     return {"success": True}
 
 
 # Stats endpoint for admin dashboard
 @router.get("/stats")
-async def get_stats(current_user: dict = Depends(get_current_admin)):
-    users = list(users_db.values())
+async def get_stats(current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    users = db.query(User).all()
     
     role_counts = {}
     for role in ROLES:
-        role_counts[role] = len([u for u in users if u.get("role") == role])
+        role_counts[role] = len([u for u in users if u.role == role])
     
-    active_count = len([u for u in users if u.get("is_active", True)])
+    active_count = len([u for u in users if u.is_active])
     inactive_count = len(users) - active_count
     
     # Recent activity (last 24h logins)
     now = datetime.utcnow()
     recent_logins = []
     for u in users:
-        if u.get("last_login"):
-            try:
-                last_login = datetime.fromisoformat(u["last_login"])
-                if (now - last_login).total_seconds() < 86400:
-                    recent_logins.append(user_to_response(u))
-            except:
-                pass
+        if u.last_login:
+            if (now - u.last_login).total_seconds() < 86400:
+                recent_logins.append(user_to_response(u))
     
     return {
         "total_users": len(users),
