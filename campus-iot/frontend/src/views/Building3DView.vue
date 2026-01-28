@@ -282,20 +282,38 @@
             <v-divider class="my-3" />
             <p class="text-caption text-medium-emphasis mb-2">
               <v-icon size="14" class="mr-1">mdi-chip</v-icon>
-              Capteurs
+              Capteurs (sphères sur les salles)
             </p>
             <div class="sensors-legend">
               <div class="legend-item">
-                <div class="legend-color" style="background: #ef4444; border-radius: 50%;"></div>
+                <div class="legend-sensor" style="background: #ff6b6b;">
+                  <v-icon size="12" color="white">mdi-thermometer</v-icon>
+                </div>
                 <span>Température</span>
               </div>
               <div class="legend-item">
-                <div class="legend-color" style="background: #3b82f6; border-radius: 50%;"></div>
+                <div class="legend-sensor" style="background: #4ecdc4;">
+                  <v-icon size="12" color="white">mdi-water-percent</v-icon>
+                </div>
                 <span>Humidité</span>
               </div>
               <div class="legend-item">
-                <div class="legend-color" style="background: #22c55e; border-radius: 50%;"></div>
+                <div class="legend-sensor" style="background: #fbbf24;">
+                  <v-icon size="12" color="white">mdi-motion-sensor</v-icon>
+                </div>
                 <span>Présence</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #22c55e;">
+                  <v-icon size="12" color="white">mdi-molecule-co2</v-icon>
+                </div>
+                <span>CO2</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #f59e0b;">
+                  <v-icon size="12" color="white">mdi-lightbulb</v-icon>
+                </div>
+                <span>Luminosité</span>
               </div>
             </div>
           </v-card-text>
@@ -1596,5 +1614,21 @@ onUnmounted(() => {
     height: 16px;
     border-radius: 4px;
   }
+  
+  .legend-sensor {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 8px currentColor;
+  }
+}
+
+.sensors-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 </style>
