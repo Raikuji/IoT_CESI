@@ -70,7 +70,7 @@ const routes = [
       title: 'Contrôle', 
       requiresAuth: true,
       permission: 'control',
-      roles: ['admin', 'technician']
+      roles: ['admin', 'technician', 'manager']
     }
   },
   {

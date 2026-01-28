@@ -7,6 +7,10 @@
           Pilotage des actionneurs
         </p>
       </div>
+      <v-chip v-if="lastSyncTime" color="success" variant="tonal" size="small">
+        <v-icon start size="14">mdi-sync</v-icon>
+        Sync: {{ lastSyncTime }}
+      </v-chip>
     </div>
 
     <v-row>
@@ -27,7 +31,7 @@
           <v-card-text class="pa-6">
             <!-- Mode Toggle -->
             <div class="d-flex align-center justify-center mb-6">
-              <v-btn-toggle v-model="heatingMode" mandatory color="primary">
+              <v-btn-toggle v-model="heatingMode" mandatory color="primary" @update:model-value="saveHeatingMode">
                 <v-btn value="manual" prepend-icon="mdi-hand-back-left">
                   Manuel
                 </v-btn>
@@ -79,12 +83,12 @@
               <div class="mb-4">
                 <div class="text-body-1 text-medium-emphasis mb-2">Température cible</div>
                 <div class="d-flex align-center justify-center ga-4">
-                  <v-btn icon variant="tonal" @click="setpoint--">
+                  <v-btn icon variant="tonal" @click="setpoint--; saveSetpoint()">
                     <v-icon>mdi-minus</v-icon>
                   </v-btn>
                   <span class="text-h2 font-weight-bold">{{ setpoint }}</span>
                   <span class="text-h5 text-medium-emphasis">°C</span>
-                  <v-btn icon variant="tonal" @click="setpoint++">
+                  <v-btn icon variant="tonal" @click="setpoint++; saveSetpoint()">
                     <v-icon>mdi-plus</v-icon>
                   </v-btn>
                 </div>
@@ -194,7 +198,7 @@
             Historique des commandes
           </v-card-title>
           <v-card-text>
-            <v-timeline side="end" density="compact">
+            <v-timeline v-if="commandHistory.length" side="end" density="compact">
               <v-timeline-item
                 v-for="cmd in commandHistory"
                 :key="cmd.id"
@@ -214,6 +218,9 @@
                 </div>
               </v-timeline-item>
             </v-timeline>
+            <div v-else class="text-center text-medium-emphasis pa-4">
+              Aucune commande enregistrée
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -222,19 +229,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSensorsStore } from '@/stores/sensors'
+import { useSettingsStore } from '@/stores/settings'
+import { useWebSocket } from '@/composables/useWebSocket'
 import axios from 'axios'
 
 const sensorsStore = useSensorsStore()
+const settingsStore = useSettingsStore()
 const { temperature } = storeToRefs(sensorsStore)
+const { onMessage } = useWebSocket()
 
 const heatingMode = ref('manual')
 const heatingValue = ref(45)
 const setpoint = ref(21)
 const sendingCommand = ref(false)
 const commandHistory = ref([])
+const lastSyncTime = ref(null)
 
 const currentTemp = computed(() => {
   return temperature.value?.latest_value?.toFixed(1) || '--'
@@ -260,14 +272,73 @@ function formatTime(dateStr) {
   })
 }
 
+// Load saved settings from backend
+async function loadSettings() {
+  try {
+    const response = await axios.get('/api/settings/')
+    const settings = response.data
+    
+    // Find heating settings
+    const modeSet = settings.find(s => s.key === 'heating_mode')
+    const valueSet = settings.find(s => s.key === 'heating_value')
+    const setpointSet = settings.find(s => s.key === 'heating_setpoint')
+    
+    if (modeSet) heatingMode.value = modeSet.value
+    if (valueSet) heatingValue.value = parseInt(valueSet.value) || 45
+    if (setpointSet) setpoint.value = parseInt(setpointSet.value) || 21
+    
+    lastSyncTime.value = formatTime(new Date().toISOString())
+  } catch (e) {
+    console.error('Failed to load settings:', e)
+  }
+}
+
+// Save heating mode
+async function saveHeatingMode() {
+  try {
+    await axios.put('/api/settings/heating_mode', {
+      value: heatingMode.value
+    })
+    broadcastChange('heating_mode', heatingMode.value)
+  } catch (e) {
+    console.error('Failed to save heating mode:', e)
+  }
+}
+
+// Save setpoint
+async function saveSetpoint() {
+  try {
+    await axios.put('/api/settings/heating_setpoint', {
+      value: String(setpoint.value)
+    })
+    broadcastChange('heating_setpoint', setpoint.value)
+  } catch (e) {
+    console.error('Failed to save setpoint:', e)
+  }
+}
+
+// Broadcast change via WebSocket
+function broadcastChange(key, value) {
+  // The backend will broadcast via WebSocket when settings change
+  lastSyncTime.value = formatTime(new Date().toISOString())
+}
+
 async function sendHeatingCommand() {
   sendingCommand.value = true
   try {
+    // Save the value
+    await axios.put('/api/settings/heating_value', {
+      value: String(heatingValue.value)
+    })
+    
+    // Send command to actuator
     await axios.post('/api/actuators/1/command', {
       value: heatingValue.value,
       source: 'manual'
     })
+    
     await fetchCommandHistory()
+    broadcastChange('heating_value', heatingValue.value)
   } catch (e) {
     console.error('Failed to send command:', e)
   } finally {
@@ -278,6 +349,8 @@ async function sendHeatingCommand() {
 async function sendSetpoint() {
   sendingCommand.value = true
   try {
+    await saveSetpoint()
+    
     await axios.post('/api/actuators/heating/mode', {
       mode: 'auto',
       setpoint: setpoint.value
@@ -300,7 +373,40 @@ async function fetchCommandHistory() {
   }
 }
 
+// Handle WebSocket messages for real-time sync
+function handleWebSocketMessage(data) {
+  if (data.type === 'system_setting_updated') {
+    const { key, value } = data
+    
+    if (key === 'heating_mode') {
+      heatingMode.value = value
+    } else if (key === 'heating_value') {
+      heatingValue.value = parseInt(value) || 45
+    } else if (key === 'heating_setpoint') {
+      setpoint.value = parseInt(value) || 21
+    }
+    
+    lastSyncTime.value = formatTime(new Date().toISOString())
+  } else if (data.type === 'actuator_command') {
+    // Refresh command history when new command arrives
+    fetchCommandHistory()
+  }
+}
+
+// Subscribe to WebSocket messages
+let unsubscribe = null
+
 onMounted(() => {
+  loadSettings()
   fetchCommandHistory()
+  
+  // Listen for WebSocket updates
+  unsubscribe = onMessage(handleWebSocketMessage)
+})
+
+onUnmounted(() => {
+  if (unsubscribe) {
+    unsubscribe()
+  }
 })
 </script>

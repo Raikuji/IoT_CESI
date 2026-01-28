@@ -76,7 +76,7 @@
               <v-btn
                 variant="tonal"
                 color="secondary"
-                class="flex-grow-1"
+                size="small"
                 @click="openAssignDialog(sensor)"
               >
                 <v-icon start>mdi-map-marker-plus</v-icon>
@@ -85,11 +85,19 @@
               <v-btn
                 variant="tonal"
                 color="primary"
-                class="flex-grow-1"
+                size="small"
                 @click="showHistory(sensor)"
               >
                 <v-icon start>mdi-chart-line</v-icon>
                 Historique
+              </v-btn>
+              <v-btn
+                variant="tonal"
+                color="error"
+                size="small"
+                @click="openDeleteDialog(sensor)"
+              >
+                <v-icon>mdi-delete</v-icon>
               </v-btn>
             </div>
           </v-card-text>
@@ -179,6 +187,35 @@
       </v-card>
     </v-dialog>
 
+    <!-- Delete Confirmation Dialog -->
+    <v-dialog v-model="deleteDialog" max-width="400">
+      <v-card color="surface">
+        <v-card-title class="d-flex align-center">
+          <v-icon start color="error">mdi-delete-alert</v-icon>
+          Supprimer le capteur
+        </v-card-title>
+        <v-card-text>
+          <p>Êtes-vous sûr de vouloir supprimer le capteur <strong>{{ sensorToDelete?.name }}</strong> ?</p>
+          <v-alert type="warning" variant="tonal" class="mt-4" density="compact">
+            Cette action est irréversible. Toutes les données historiques seront perdues.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="deleteDialog = false">Annuler</v-btn>
+          <v-btn 
+            color="error" 
+            variant="elevated"
+            :loading="deleting"
+            @click="deleteSensor"
+          >
+            <v-icon start>mdi-delete</v-icon>
+            Supprimer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- History Dialog -->
     <v-dialog v-model="historyDialog" max-width="800">
       <v-card color="surface">
@@ -226,11 +263,14 @@ const { floors, rooms } = storeToRefs(buildingStore)
 
 const historyDialog = ref(false)
 const assignDialog = ref(false)
+const deleteDialog = ref(false)
 const selectedSensor = ref(null)
+const sensorToDelete = ref(null)
 const historyData = ref([])
 const selectedFloor = ref(null)
 const selectedRoom = ref(null)
 const assigning = ref(false)
+const deleting = ref(false)
 
 // Get rooms filtered by floor
 const filteredRooms = computed(() => {
@@ -363,6 +403,40 @@ const historySeries = computed(() => [{
   name: selectedSensor.value?.name || 'Valeur',
   data: historyData.value
 }])
+
+// Open delete confirmation dialog
+function openDeleteDialog(sensor) {
+  sensorToDelete.value = sensor
+  deleteDialog.value = true
+}
+
+// Delete sensor
+async function deleteSensor() {
+  if (!sensorToDelete.value) return
+  
+  deleting.value = true
+  try {
+    await axios.delete(`/api/sensors/${sensorToDelete.value.id}`)
+    
+    // Also remove from placed_sensors if exists
+    const placedSensor = buildingStore.sensors.find(
+      s => s.type === sensorToDelete.value.type && s.room_id === sensorToDelete.value.location
+    )
+    if (placedSensor) {
+      await buildingStore.removeSensor(placedSensor.id)
+    }
+    
+    // Refresh sensors list
+    await sensorsStore.fetchSensors()
+    
+    deleteDialog.value = false
+    sensorToDelete.value = null
+  } catch (e) {
+    console.error('Failed to delete sensor:', e)
+  } finally {
+    deleting.value = false
+  }
+}
 
 function refresh() {
   sensorsStore.fetchSensors()

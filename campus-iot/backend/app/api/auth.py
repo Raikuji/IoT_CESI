@@ -46,7 +46,7 @@ ROLES = {
         "description": "Supervision et rapports",
         "color": "#8b5cf6",
         "icon": "mdi-account-tie",
-        "permissions": ["dashboard", "sensors", "alerts", "building", "reports"]
+        "permissions": ["dashboard", "sensors", "alerts", "building", "reports", "control"]
     },
     "user": {
         "name": "Utilisateur",
@@ -198,6 +198,36 @@ async def get_current_admin(current_user: User = Depends(get_current_user)) -> U
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+def has_permission(user: User, permission: str) -> bool:
+    """Check if user has a specific permission"""
+    role = user.role or "user"
+    role_info = ROLES.get(role, ROLES["user"])
+    permissions = role_info.get("permissions", [])
+    return "all" in permissions or permission in permissions
+
+
+def require_permission(permission: str):
+    """Dependency to require a specific permission"""
+    async def check_permission(current_user: User = Depends(get_current_user)) -> User:
+        if not has_permission(current_user, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission '{permission}' required"
+            )
+        return current_user
+    return check_permission
+
+
+async def get_control_user(current_user: User = Depends(get_current_user)) -> User:
+    """Require control permission (admin, technician, manager)"""
+    if not has_permission(current_user, "control"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Control permission required. Only Admin, Technician and Manager can access."
         )
     return current_user
 

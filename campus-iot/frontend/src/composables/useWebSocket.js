@@ -4,6 +4,9 @@ import { useAlertsStore } from '@/stores/alerts'
 import { useBuildingStore } from '@/stores/building'
 import { useSettingsStore } from '@/stores/settings'
 
+// Global message listeners
+const messageListeners = new Set()
+
 export function useWebSocket() {
   const ws = ref(null)
   const connected = ref(false)
@@ -95,7 +98,10 @@ export function useWebSocket() {
       
       // Settings sync
       case 'setting_changed':
+      case 'system_setting_updated':
         settingsStore.handleSettingChanged(message)
+        // Notify all listeners
+        messageListeners.forEach(listener => listener(message))
         break
       
       case 'settings_bulk_changed':
@@ -103,8 +109,15 @@ export function useWebSocket() {
         settingsStore.fetchSettings()
         break
       
+      case 'actuator_command':
+        // Notify listeners about new actuator command
+        messageListeners.forEach(listener => listener(message))
+        break
+      
       default:
         console.log('Unknown message type:', message.type)
+        // Still notify listeners for custom handling
+        messageListeners.forEach(listener => listener(message))
     }
   }
 
@@ -140,10 +153,20 @@ export function useWebSocket() {
     disconnect()
   })
 
+  // Subscribe to messages
+  function onMessage(callback) {
+    messageListeners.add(callback)
+    // Return unsubscribe function
+    return () => {
+      messageListeners.delete(callback)
+    }
+  }
+
   return {
     connected,
     send,
     disconnect,
-    reconnect: connect
+    reconnect: connect,
+    onMessage
   }
 }

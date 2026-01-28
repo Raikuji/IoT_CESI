@@ -11,7 +11,7 @@ from datetime import datetime
 from db.database import get_db
 from models.settings import SystemSetting, UserPreference
 from models.user import User
-from api.auth import get_current_user, get_current_admin
+from api.auth import get_current_user, get_current_admin, get_control_user
 from services.websocket_manager import ws_manager
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
@@ -68,6 +68,7 @@ def parse_setting_value(value: str, value_type: str):
     return value
 
 
+@router.get("/", response_model=List[SettingResponse])
 @router.get("/system", response_model=List[SettingResponse])
 async def get_all_settings(
     category: Optional[str] = None,
@@ -128,7 +129,52 @@ async def update_setting(
     
     # Broadcast setting change to all clients
     await ws_manager.broadcast({
-        "type": "setting_changed",
+        "type": "system_setting_updated",
+        "key": key,
+        "value": parse_setting_value(setting.value, setting.value_type)
+    })
+    
+    return setting_to_response(setting)
+
+
+# Heating-specific endpoints (accessible to all authenticated users)
+HEATING_KEYS = ["heating_mode", "heating_value", "heating_setpoint"]
+
+@router.put("/{key}")
+async def update_heating_setting(
+    key: str,
+    data: SettingUpdate,
+    current_user: User = Depends(get_control_user),
+    db: Session = Depends(get_db)
+):
+    """Update heating settings (requires control permission: admin, technician, manager)"""
+    if key not in HEATING_KEYS:
+        raise HTTPException(status_code=403, detail="Only heating settings can be updated here")
+    
+    setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    
+    # Create if not exists
+    if not setting:
+        setting = SystemSetting(
+            key=key,
+            value=data.value,
+            value_type="number" if key in ["heating_value", "heating_setpoint"] else "string",
+            category="heating",
+            description=f"Heating {key.replace('heating_', '')}",
+            updated_by_user_id=current_user.id
+        )
+        db.add(setting)
+    else:
+        setting.value = data.value
+        setting.updated_by_user_id = current_user.id
+        setting.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(setting)
+    
+    # Broadcast setting change to all clients
+    await ws_manager.broadcast({
+        "type": "system_setting_updated",
         "key": key,
         "value": parse_setting_value(setting.value, setting.value_type)
     })
