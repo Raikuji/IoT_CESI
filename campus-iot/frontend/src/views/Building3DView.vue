@@ -120,19 +120,16 @@
               </div>
             </div>
 
-            <!-- Mini stats -->
-            <div class="mini-stats" v-if="!loading">
-              <div class="mini-stat">
-                <v-icon size="16" color="error">mdi-thermometer</v-icon>
-                <span>{{ avgTemperature }}°C</span>
-              </div>
-              <div class="mini-stat">
-                <v-icon size="16" color="info">mdi-water-percent</v-icon>
-                <span>{{ avgHumidity }}%</span>
-              </div>
-              <div class="mini-stat" v-if="alertCount > 0">
-                <v-icon size="16" color="warning">mdi-alert</v-icon>
-                <span>{{ alertCount }}</span>
+            <!-- Sensor counts by type (dynamic) -->
+            <div class="mini-stats" v-if="!loading && sensorCounts.length > 0">
+              <div 
+                v-for="count in sensorCounts" 
+                :key="count.type" 
+                class="mini-stat"
+                :style="{ borderColor: count.color + '66' }"
+              >
+                <v-icon size="16" :color="count.color">{{ count.icon }}</v-icon>
+                <span>{{ count.count }}</span>
               </div>
             </div>
           </div>
@@ -387,6 +384,15 @@ const roomTypeColors = {
   utility: '#9e9e9e'
 }
 
+// Sensor type config
+const sensorTypeConfig = {
+  temperature: { icon: 'mdi-thermometer', color: '#ff6b6b', name: 'Température' },
+  humidity: { icon: 'mdi-water-percent', color: '#4ecdc4', name: 'Humidité' },
+  presence: { icon: 'mdi-motion-sensor', color: '#fbbf24', name: 'Présence' },
+  co2: { icon: 'mdi-molecule-co2', color: '#22c55e', name: 'CO2' },
+  light: { icon: 'mdi-lightbulb', color: '#f59e0b', name: 'Luminosité' }
+}
+
 // Computed
 const roomSensors = computed(() => {
   if (!selectedRoom.value) return []
@@ -395,20 +401,29 @@ const roomSensors = computed(() => {
 
 const totalSensors = computed(() => buildingSensors.value.length)
 
-const avgTemperature = computed(() => {
-  const temps = buildingSensors.value
-    .filter(s => s.type === 'temperature' && s.value !== null)
-    .map(s => s.value)
-  if (temps.length === 0) return '--'
-  return (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)
-})
-
-const avgHumidity = computed(() => {
-  const hums = buildingSensors.value
-    .filter(s => s.type === 'humidity' && s.value !== null)
-    .map(s => s.value)
-  if (hums.length === 0) return '--'
-  return Math.round(hums.reduce((a, b) => a + b, 0) / hums.length)
+// Dynamic sensor counts by type (only shows types that exist)
+const sensorCounts = computed(() => {
+  const counts = {}
+  
+  // Count sensors by type
+  buildingSensors.value.forEach(sensor => {
+    if (!counts[sensor.type]) {
+      counts[sensor.type] = 0
+    }
+    counts[sensor.type]++
+  })
+  
+  // Convert to array with config, only for types that have sensors
+  return Object.entries(counts)
+    .filter(([type, count]) => count > 0 && sensorTypeConfig[type])
+    .map(([type, count]) => ({
+      type,
+      count,
+      icon: sensorTypeConfig[type].icon,
+      color: sensorTypeConfig[type].color,
+      name: sensorTypeConfig[type].name
+    }))
+    .sort((a, b) => b.count - a.count) // Sort by count descending
 })
 
 const alertCount = computed(() => activeAlerts.value.length)
@@ -1384,21 +1399,29 @@ onUnmounted(() => {
   top: 20px;
   right: 20px;
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   z-index: 5;
+  max-width: 300px;
+  justify-content: flex-end;
   
   .mini-stat {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(10px);
     border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: scale(1.05);
+    }
   }
 }
 
