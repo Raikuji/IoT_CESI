@@ -24,22 +24,6 @@
             </v-btn>
           </v-btn-toggle>
           
-          <!-- View mode -->
-          <v-btn-toggle v-model="viewMode" mandatory density="compact" class="ml-2">
-            <v-btn value="normal" size="small">
-              <v-icon size="18">mdi-eye</v-icon>
-              <v-tooltip activator="parent" location="bottom">Vue normale</v-tooltip>
-            </v-btn>
-            <v-btn value="heatmap" size="small">
-              <v-icon size="18">mdi-thermometer</v-icon>
-              <v-tooltip activator="parent" location="bottom">Heatmap température</v-tooltip>
-            </v-btn>
-            <v-btn value="sensors" size="small">
-              <v-icon size="18">mdi-chip</v-icon>
-              <v-tooltip activator="parent" location="bottom">Vue capteurs</v-tooltip>
-            </v-btn>
-          </v-btn-toggle>
-          
           <!-- Camera controls -->
           <div class="camera-controls ml-2">
             <v-btn icon variant="text" size="small" @click="setCameraTop">
@@ -267,9 +251,25 @@
             Légende
           </v-card-title>
           <v-card-text>
-            <!-- View mode specific legend -->
-            <div v-if="viewMode === 'heatmap'" class="heatmap-legend">
-              <p class="text-caption text-medium-emphasis mb-2">Température</p>
+            <!-- Room types legend -->
+            <div class="type-legend">
+              <div 
+                v-for="(color, type) in roomTypeColors" 
+                :key="type"
+                class="legend-item"
+              >
+                <div class="legend-color" :style="{ background: color }"></div>
+                <span>{{ getRoomTypeLabel(type) }}</span>
+              </div>
+            </div>
+            
+            <!-- Temperature heatmap legend -->
+            <v-divider class="my-3" />
+            <p class="text-caption text-medium-emphasis mb-2">
+              <v-icon size="14" class="mr-1">mdi-thermometer</v-icon>
+              Température (salles avec capteur)
+            </p>
+            <div class="heatmap-legend">
               <div class="legend-gradient"></div>
               <div class="legend-labels">
                 <span>❄️ &lt;18°C</span>
@@ -278,14 +278,24 @@
               </div>
             </div>
             
-            <div v-else class="type-legend">
-              <div 
-                v-for="(color, type) in roomTypeColors" 
-                :key="type"
-                class="legend-item"
-              >
-                <div class="legend-color" :style="{ background: color }"></div>
-                <span>{{ getRoomTypeLabel(type) }}</span>
+            <!-- Sensors legend -->
+            <v-divider class="my-3" />
+            <p class="text-caption text-medium-emphasis mb-2">
+              <v-icon size="14" class="mr-1">mdi-chip</v-icon>
+              Capteurs
+            </p>
+            <div class="sensors-legend">
+              <div class="legend-item">
+                <div class="legend-color" style="background: #ef4444; border-radius: 50%;"></div>
+                <span>Température</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background: #3b82f6; border-radius: 50%;"></div>
+                <span>Humidité</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background: #22c55e; border-radius: 50%;"></div>
+                <span>Présence</span>
               </div>
             </div>
           </v-card-text>
@@ -333,7 +343,6 @@ const canvasContainer = ref(null)
 const loading = ref(true)
 const selectedFloor = ref('R+1')
 const selectedRoom = ref(null)
-const viewMode = ref('normal')
 const showQRDialog = ref(false)
 const showReportDialog = ref(false)
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -588,9 +597,7 @@ function buildRooms() {
     const material = new THREE.MeshStandardMaterial({
       color: color,
       roughness: 0.6,
-      metalness: 0.3,
-      transparent: viewMode.value === 'sensors',
-      opacity: viewMode.value === 'sensors' ? 0.4 : 1
+      metalness: 0.3
     })
     
     const mesh = new THREE.Mesh(geometry, material)
@@ -614,10 +621,8 @@ function buildRooms() {
     // Add label
     addRoomLabel(room, { x, y: height + 0.8, z }, width)
     
-    // Add sensors if in sensor view
-    if (viewMode.value === 'sensors') {
-      addSensorMarkers(room, { x, y: height, z })
-    }
+    // Always add sensors on top of rooms (visible in all views)
+    addSensorMarkers(room, { x, y: height, z })
   })
 }
 
@@ -811,26 +816,24 @@ function clearScene() {
 }
 
 function getRoomColor(room) {
-  if (viewMode.value === 'heatmap') {
-    const sensors = buildingStore.getRoomSensors(room.id)
-    const tempSensor = sensors.find(s => s.type === 'temperature')
-    
-    if (!tempSensor || tempSensor.value === null) {
-      return 0x555555
-    }
-    
+  // Check if room has a temperature sensor - use heatmap color
+  const sensors = buildingStore.getRoomSensors(room.id)
+  const tempSensor = sensors.find(s => s.type === 'temperature')
+  
+  if (tempSensor && tempSensor.value !== null) {
     const temp = tempSensor.value
-    // Gradient from blue to green to red
-    if (temp < 16) return 0x2563eb
-    if (temp < 18) return 0x3b82f6
-    if (temp < 20) return 0x22c55e
-    if (temp < 22) return 0x4ade80
-    if (temp < 24) return 0x84cc16
-    if (temp < 26) return 0xeab308
-    if (temp < 28) return 0xf97316
-    return 0xef4444
+    // Gradient from blue (cold) to green (optimal) to red (hot)
+    if (temp < 16) return 0x2563eb  // Very cold - blue
+    if (temp < 18) return 0x3b82f6  // Cold - light blue
+    if (temp < 20) return 0x22c55e  // Cool - green
+    if (temp < 22) return 0x4ade80  // Optimal - light green
+    if (temp < 24) return 0x84cc16  // Warm - yellow-green
+    if (temp < 26) return 0xeab308  // Hot - yellow
+    if (temp < 28) return 0xf97316  // Very hot - orange
+    return 0xef4444                  // Extreme - red
   }
   
+  // No temperature sensor - use room type color
   return parseInt(roomTypeColors[room.type]?.replace('#', '0x') || '0x666666')
 }
 
@@ -1164,14 +1167,6 @@ function getRoomTypeLabel(type) {
 // Watchers
 watch(selectedFloor, () => {
   buildingStore.setFloor(selectedFloor.value)
-  nextTick(() => {
-    clearScene()
-    addBuildingBase()
-    buildRooms()
-  })
-})
-
-watch(viewMode, () => {
   nextTick(() => {
     clearScene()
     addBuildingBase()
