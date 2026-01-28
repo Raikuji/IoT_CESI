@@ -440,8 +440,13 @@ async def get_stats(current_user: User = Depends(get_current_admin), db: Session
     recent_logins = []
     for u in users:
         if u.last_login:
-            if (now - u.last_login).total_seconds() < 86400:
-                recent_logins.append(user_to_response(u))
+            try:
+                # Handle timezone-aware datetimes from PostgreSQL
+                last_login = u.last_login.replace(tzinfo=None) if u.last_login.tzinfo else u.last_login
+                if (now - last_login).total_seconds() < 86400:
+                    recent_logins.append(user_to_response(u))
+            except Exception:
+                pass
     
     return {
         "total_users": len(users),
