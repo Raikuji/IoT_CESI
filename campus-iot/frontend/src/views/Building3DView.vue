@@ -24,22 +24,6 @@
             </v-btn>
           </v-btn-toggle>
           
-          <!-- View mode -->
-          <v-btn-toggle v-model="viewMode" mandatory density="compact" class="ml-2">
-            <v-btn value="normal" size="small">
-              <v-icon size="18">mdi-eye</v-icon>
-              <v-tooltip activator="parent" location="bottom">Vue normale</v-tooltip>
-            </v-btn>
-            <v-btn value="heatmap" size="small">
-              <v-icon size="18">mdi-thermometer</v-icon>
-              <v-tooltip activator="parent" location="bottom">Heatmap température</v-tooltip>
-            </v-btn>
-            <v-btn value="sensors" size="small">
-              <v-icon size="18">mdi-chip</v-icon>
-              <v-tooltip activator="parent" location="bottom">Vue capteurs</v-tooltip>
-            </v-btn>
-          </v-btn-toggle>
-          
           <!-- Camera controls -->
           <div class="camera-controls ml-2">
             <v-btn icon variant="text" size="small" @click="setCameraTop">
@@ -136,19 +120,16 @@
               </div>
             </div>
 
-            <!-- Mini stats -->
-            <div class="mini-stats" v-if="!loading">
-              <div class="mini-stat">
-                <v-icon size="16" color="error">mdi-thermometer</v-icon>
-                <span>{{ avgTemperature }}°C</span>
-              </div>
-              <div class="mini-stat">
-                <v-icon size="16" color="info">mdi-water-percent</v-icon>
-                <span>{{ avgHumidity }}%</span>
-              </div>
-              <div class="mini-stat" v-if="alertCount > 0">
-                <v-icon size="16" color="warning">mdi-alert</v-icon>
-                <span>{{ alertCount }}</span>
+            <!-- Sensor counts by type (dynamic) -->
+            <div class="mini-stats" v-if="!loading && sensorCounts.length > 0">
+              <div 
+                v-for="count in sensorCounts" 
+                :key="count.type" 
+                class="mini-stat"
+                :style="{ borderColor: count.color + '66' }"
+              >
+                <v-icon size="16" :color="count.color">{{ count.icon }}</v-icon>
+                <span>{{ count.count }}</span>
               </div>
             </div>
           </div>
@@ -202,16 +183,6 @@
                     {{ formatSensorValue(sensor) }}
                   </span>
                 </div>
-                <v-btn
-                  icon
-                  variant="text"
-                  size="x-small"
-                  color="error"
-                  class="delete-btn"
-                  @click.stop="removeSensor(sensor.id)"
-                >
-                  <v-icon size="16">mdi-delete</v-icon>
-                </v-btn>
               </div>
             </div>
             
@@ -277,9 +248,25 @@
             Légende
           </v-card-title>
           <v-card-text>
-            <!-- View mode specific legend -->
-            <div v-if="viewMode === 'heatmap'" class="heatmap-legend">
-              <p class="text-caption text-medium-emphasis mb-2">Température</p>
+            <!-- Room types legend -->
+            <div class="type-legend">
+              <div 
+                v-for="(color, type) in roomTypeColors" 
+                :key="type"
+                class="legend-item"
+              >
+                <div class="legend-color" :style="{ background: color }"></div>
+                <span>{{ getRoomTypeLabel(type) }}</span>
+              </div>
+            </div>
+            
+            <!-- Temperature heatmap legend -->
+            <v-divider class="my-3" />
+            <p class="text-caption text-medium-emphasis mb-2">
+              <v-icon size="14" class="mr-1">mdi-thermometer</v-icon>
+              Température (salles avec capteur)
+            </p>
+            <div class="heatmap-legend">
               <div class="legend-gradient"></div>
               <div class="legend-labels">
                 <span>❄️ &lt;18°C</span>
@@ -288,14 +275,42 @@
               </div>
             </div>
             
-            <div v-else class="type-legend">
-              <div 
-                v-for="(color, type) in roomTypeColors" 
-                :key="type"
-                class="legend-item"
-              >
-                <div class="legend-color" :style="{ background: color }"></div>
-                <span>{{ getRoomTypeLabel(type) }}</span>
+            <!-- Sensors legend -->
+            <v-divider class="my-3" />
+            <p class="text-caption text-medium-emphasis mb-2">
+              <v-icon size="14" class="mr-1">mdi-chip</v-icon>
+              Capteurs (sphères sur les salles)
+            </p>
+            <div class="sensors-legend">
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #ff6b6b;">
+                  <v-icon size="12" color="white">mdi-thermometer</v-icon>
+                </div>
+                <span>Température</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #4ecdc4;">
+                  <v-icon size="12" color="white">mdi-water-percent</v-icon>
+                </div>
+                <span>Humidité</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #fbbf24;">
+                  <v-icon size="12" color="white">mdi-motion-sensor</v-icon>
+                </div>
+                <span>Présence</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #22c55e;">
+                  <v-icon size="12" color="white">mdi-molecule-co2</v-icon>
+                </div>
+                <span>CO2</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-sensor" style="background: #f59e0b;">
+                  <v-icon size="12" color="white">mdi-lightbulb</v-icon>
+                </div>
+                <span>Luminosité</span>
               </div>
             </div>
           </v-card-text>
@@ -343,7 +358,6 @@ const canvasContainer = ref(null)
 const loading = ref(true)
 const selectedFloor = ref('R+1')
 const selectedRoom = ref(null)
-const viewMode = ref('normal')
 const showQRDialog = ref(false)
 const showReportDialog = ref(false)
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -370,6 +384,15 @@ const roomTypeColors = {
   utility: '#9e9e9e'
 }
 
+// Sensor type config
+const sensorTypeConfig = {
+  temperature: { icon: 'mdi-thermometer', color: '#ff6b6b', name: 'Température' },
+  humidity: { icon: 'mdi-water-percent', color: '#4ecdc4', name: 'Humidité' },
+  presence: { icon: 'mdi-motion-sensor', color: '#fbbf24', name: 'Présence' },
+  co2: { icon: 'mdi-molecule-co2', color: '#22c55e', name: 'CO2' },
+  light: { icon: 'mdi-lightbulb', color: '#f59e0b', name: 'Luminosité' }
+}
+
 // Computed
 const roomSensors = computed(() => {
   if (!selectedRoom.value) return []
@@ -378,20 +401,29 @@ const roomSensors = computed(() => {
 
 const totalSensors = computed(() => buildingSensors.value.length)
 
-const avgTemperature = computed(() => {
-  const temps = buildingSensors.value
-    .filter(s => s.type === 'temperature' && s.value !== null)
-    .map(s => s.value)
-  if (temps.length === 0) return '--'
-  return (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)
-})
-
-const avgHumidity = computed(() => {
-  const hums = buildingSensors.value
-    .filter(s => s.type === 'humidity' && s.value !== null)
-    .map(s => s.value)
-  if (hums.length === 0) return '--'
-  return Math.round(hums.reduce((a, b) => a + b, 0) / hums.length)
+// Dynamic sensor counts by type (only shows types that exist)
+const sensorCounts = computed(() => {
+  const counts = {}
+  
+  // Count sensors by type
+  buildingSensors.value.forEach(sensor => {
+    if (!counts[sensor.type]) {
+      counts[sensor.type] = 0
+    }
+    counts[sensor.type]++
+  })
+  
+  // Convert to array with config, only for types that have sensors
+  return Object.entries(counts)
+    .filter(([type, count]) => count > 0 && sensorTypeConfig[type])
+    .map(([type, count]) => ({
+      type,
+      count,
+      icon: sensorTypeConfig[type].icon,
+      color: sensorTypeConfig[type].color,
+      name: sensorTypeConfig[type].name
+    }))
+    .sort((a, b) => b.count - a.count) // Sort by count descending
 })
 
 const alertCount = computed(() => activeAlerts.value.length)
@@ -598,9 +630,7 @@ function buildRooms() {
     const material = new THREE.MeshStandardMaterial({
       color: color,
       roughness: 0.6,
-      metalness: 0.3,
-      transparent: viewMode.value === 'sensors',
-      opacity: viewMode.value === 'sensors' ? 0.4 : 1
+      metalness: 0.3
     })
     
     const mesh = new THREE.Mesh(geometry, material)
@@ -624,10 +654,8 @@ function buildRooms() {
     // Add label
     addRoomLabel(room, { x, y: height + 0.8, z }, width)
     
-    // Add sensors if in sensor view
-    if (viewMode.value === 'sensors') {
-      addSensorMarkers(room, { x, y: height, z })
-    }
+    // Always add sensors on top of rooms (visible in all views)
+    addSensorMarkers(room, { x, y: height, z })
   })
 }
 
@@ -821,26 +849,24 @@ function clearScene() {
 }
 
 function getRoomColor(room) {
-  if (viewMode.value === 'heatmap') {
-    const sensors = buildingStore.getRoomSensors(room.id)
-    const tempSensor = sensors.find(s => s.type === 'temperature')
-    
-    if (!tempSensor || tempSensor.value === null) {
-      return 0x555555
-    }
-    
+  // Check if room has a temperature sensor - use heatmap color
+  const sensors = buildingStore.getRoomSensors(room.id)
+  const tempSensor = sensors.find(s => s.type === 'temperature')
+  
+  if (tempSensor && tempSensor.value !== null) {
     const temp = tempSensor.value
-    // Gradient from blue to green to red
-    if (temp < 16) return 0x2563eb
-    if (temp < 18) return 0x3b82f6
-    if (temp < 20) return 0x22c55e
-    if (temp < 22) return 0x4ade80
-    if (temp < 24) return 0x84cc16
-    if (temp < 26) return 0xeab308
-    if (temp < 28) return 0xf97316
-    return 0xef4444
+    // Gradient from blue (cold) to green (optimal) to red (hot)
+    if (temp < 16) return 0x2563eb  // Very cold - blue
+    if (temp < 18) return 0x3b82f6  // Cold - light blue
+    if (temp < 20) return 0x22c55e  // Cool - green
+    if (temp < 22) return 0x4ade80  // Optimal - light green
+    if (temp < 24) return 0x84cc16  // Warm - yellow-green
+    if (temp < 26) return 0xeab308  // Hot - yellow
+    if (temp < 28) return 0xf97316  // Very hot - orange
+    return 0xef4444                  // Extreme - red
   }
   
+  // No temperature sensor - use room type color
   return parseInt(roomTypeColors[room.type]?.replace('#', '0x') || '0x666666')
 }
 
@@ -1181,14 +1207,6 @@ watch(selectedFloor, () => {
   })
 })
 
-watch(viewMode, () => {
-  nextTick(() => {
-    clearScene()
-    addBuildingBase()
-    buildRooms()
-  })
-})
-
 // Lifecycle
 onMounted(() => {
   setTimeout(initScene, 100)
@@ -1381,21 +1399,29 @@ onUnmounted(() => {
   top: 20px;
   right: 20px;
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   z-index: 5;
+  max-width: 300px;
+  justify-content: flex-end;
   
   .mini-stat {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(10px);
     border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: scale(1.05);
+    }
   }
 }
 
@@ -1611,5 +1637,21 @@ onUnmounted(() => {
     height: 16px;
     border-radius: 4px;
   }
+  
+  .legend-sensor {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 8px currentColor;
+  }
+}
+
+.sensors-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 </style>
