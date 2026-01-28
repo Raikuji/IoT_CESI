@@ -35,38 +35,45 @@ logger = logging.getLogger(__name__)
 
 
 def handle_mqtt_message(sensor_type: str, value, topic: str, room_id: str = "unknown"):
-    """Handle incoming MQTT messages and store in database"""
+    """Handle incoming MQTT messages and store in database
+    
+    The room_id comes directly from the MQTT payload {"room": "X101", "value": 23.5}
+    This auto-assigns the sensor to the room specified by the Arduino/transmitter.
+    """
     try:
         db = SessionLocal()
         
         logger.info(f"[HANDLER] Processing: room={room_id}, type={sensor_type}, value={value}")
         
-        # Find or create sensor based on type and room
+        # Find sensor by type and room (exact match)
         sensor = db.query(Sensor).filter(
             Sensor.type == sensor_type,
             Sensor.location == room_id
         ).first()
         
-        # If no sensor for this room, try to find by type only
-        if not sensor:
+        # If room is provided but no sensor exists for this room, create one
+        # If room is "unknown", try to find any sensor of this type
+        if not sensor and room_id == "unknown":
             sensor = db.query(Sensor).filter(Sensor.type == sensor_type).first()
         
         if not sensor:
-            # Auto-create sensor if it doesn't exist
+            # Auto-create sensor with the room from payload
             logger.info(f"Creating new sensor: {sensor_type} in {room_id}")
             sensor = Sensor(
-                name=f"{sensor_type.capitalize()} {room_id}",
+                name=f"{sensor_type.capitalize()} {room_id}" if room_id != "unknown" else f"{sensor_type.capitalize()} Auto",
                 type=sensor_type,
-                location=room_id,
+                location=room_id if room_id != "unknown" else None,
                 is_active=True
             )
             db.add(sensor)
             db.commit()
             db.refresh(sensor)
         else:
-            # Update sensor location
+            # Update sensor - ALWAYS update location if room is provided in payload
             sensor.is_active = True
-            sensor.location = room_id
+            if room_id != "unknown":
+                sensor.location = room_id
+                sensor.name = f"{sensor_type.capitalize()} {room_id}"
             db.commit()
         
         # Store data point
@@ -107,23 +114,41 @@ def handle_mqtt_message(sensor_type: str, value, topic: str, room_id: str = "unk
                 db.commit()
                 logger.info(f"Alert triggered: {alert.message}")
                 
-                # Broadcast alert via WebSocket (async)
-                asyncio.create_task(ws_manager.broadcast_alert({
-                    "id": alert.id,
-                    "sensor_id": sensor.id,
-                    "room_id": room_id,
-                    "type": alert.type,
-                    "message": alert.message,
-                    "severity": alert.severity,
-                    "created_at": alert.created_at.isoformat()
-                }))
+                # Broadcast alert via WebSocket (async-safe)
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(ws_manager.broadcast_alert({
+                        "id": alert.id,
+                        "sensor_id": sensor.id,
+                        "room_id": room_id,
+                        "type": alert.type,
+                        "message": alert.message,
+                        "severity": alert.severity,
+                        "created_at": alert.created_at.isoformat()
+                    }))
+                except RuntimeError:
+                    # No running loop, use asyncio.run for new loop
+                    asyncio.run(ws_manager.broadcast_alert({
+                        "id": alert.id,
+                        "sensor_id": sensor.id,
+                        "room_id": room_id,
+                        "type": alert.type,
+                        "message": alert.message,
+                        "severity": alert.severity,
+                        "created_at": alert.created_at.isoformat()
+                    }))
         
         db.close()
         
-        # Broadcast sensor data via WebSocket (includes room info)
-        asyncio.create_task(ws_manager.broadcast_sensor_data(
-            sensor_type, value, datetime.utcnow().isoformat(), room_id
-        ))
+        # Broadcast sensor data via WebSocket (async-safe)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(ws_manager.broadcast_sensor_data(
+                sensor_type, value, datetime.utcnow().isoformat(), room_id
+            ))
+        except RuntimeError:
+            # No running loop - skip broadcast (will be picked up on next poll)
+            pass
         
         logger.info(f"[HANDLER] Stored and broadcast: {sensor_type}={value} for {room_id}")
         

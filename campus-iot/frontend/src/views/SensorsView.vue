@@ -34,10 +34,10 @@
                       v-if="sensor.location && sensor.location !== 'unknown'" 
                       size="x-small" 
                       color="success" 
-                      variant="tonal"
+                      variant="flat"
                     >
-                      <v-icon start size="12">mdi-map-marker</v-icon>
-                      {{ getRoomName(sensor.location) }}
+                      <v-icon start size="12">mdi-check-circle</v-icon>
+                      {{ sensor.location }}
                     </v-chip>
                     <v-chip 
                       v-else 
@@ -45,8 +45,8 @@
                       color="warning" 
                       variant="tonal"
                     >
-                      <v-icon start size="12">mdi-alert</v-icon>
-                      Non assigné
+                      <v-icon start size="12">mdi-clock-outline</v-icon>
+                      En attente de room
                     </v-chip>
                   </div>
                 </div>
@@ -75,21 +75,22 @@
             <div class="d-flex gap-2 mt-4">
               <v-btn
                 variant="tonal"
-                color="secondary"
-                size="small"
-                @click="openAssignDialog(sensor)"
-              >
-                <v-icon start>mdi-map-marker-plus</v-icon>
-                Assigner
-              </v-btn>
-              <v-btn
-                variant="tonal"
                 color="primary"
                 size="small"
                 @click="showHistory(sensor)"
               >
                 <v-icon start>mdi-chart-line</v-icon>
                 Historique
+              </v-btn>
+              <v-btn
+                variant="tonal"
+                color="info"
+                size="small"
+                :to="`/building?room=${sensor.location}`"
+                :disabled="!sensor.location || sensor.location === 'unknown'"
+              >
+                <v-icon start>mdi-cube-outline</v-icon>
+                Voir en 3D
               </v-btn>
               <v-btn
                 variant="tonal"
@@ -112,80 +113,14 @@
       <p class="text-body-2 text-medium-emphasis mt-2">
         Les capteurs apparaîtront ici automatiquement quand ils enverront des données via MQTT
       </p>
-      <v-chip class="mt-4" color="info" variant="tonal">
-        Topic: campus/orion/sensors/{TYPE}
-      </v-chip>
+      <v-alert type="info" variant="tonal" class="mt-4 text-left" density="compact">
+        <div class="text-body-2">
+          <strong>Format attendu :</strong><br>
+          Topic: <code>campus/orion/sensors/{TYPE}</code><br>
+          Payload: <code>{"room": "X101", "value": 23.5}</code>
+        </div>
+      </v-alert>
     </v-card>
-
-    <!-- Assign Room Dialog -->
-    <v-dialog v-model="assignDialog" max-width="500">
-      <v-card color="surface">
-        <v-card-title class="d-flex align-center">
-          <v-icon start color="secondary">mdi-map-marker-plus</v-icon>
-          Assigner à une salle
-          <v-spacer></v-spacer>
-          <v-btn icon variant="text" @click="assignDialog = false">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        <v-card-text>
-          <div class="text-body-1 mb-4">
-            Capteur: <strong>{{ selectedSensor?.name }}</strong>
-          </div>
-          
-          <!-- Floor Selection -->
-          <v-select
-            v-model="selectedFloor"
-            :items="floors"
-            item-title="name"
-            item-value="id"
-            label="Étage"
-            variant="outlined"
-            class="mb-4"
-            prepend-inner-icon="mdi-stairs"
-          ></v-select>
-          
-          <!-- Room Selection -->
-          <v-select
-            v-model="selectedRoom"
-            :items="filteredRooms"
-            item-title="displayName"
-            item-value="id"
-            label="Salle"
-            variant="outlined"
-            prepend-inner-icon="mdi-door"
-            :disabled="!selectedFloor"
-          ></v-select>
-          
-          <v-alert 
-            v-if="selectedRoom" 
-            type="info" 
-            variant="tonal" 
-            class="mt-4"
-            density="compact"
-          >
-            <div class="d-flex align-center">
-              <v-icon start>mdi-information</v-icon>
-              <span>Le capteur sera visible sur le plan 3D dans la salle <strong>{{ selectedRoom }}</strong></span>
-            </div>
-          </v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="assignDialog = false">Annuler</v-btn>
-          <v-btn 
-            color="secondary" 
-            variant="elevated"
-            :disabled="!selectedRoom"
-            :loading="assigning"
-            @click="assignSensorToRoom"
-          >
-            <v-icon start>mdi-check</v-icon>
-            Assigner
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
 
     <!-- Delete Confirmation Dialog -->
     <v-dialog v-model="deleteDialog" max-width="400">
@@ -259,35 +194,13 @@ const apexchart = VueApexCharts
 const sensorsStore = useSensorsStore()
 const buildingStore = useBuildingStore()
 const { sensors } = storeToRefs(sensorsStore)
-const { floors, rooms } = storeToRefs(buildingStore)
 
 const historyDialog = ref(false)
-const assignDialog = ref(false)
 const deleteDialog = ref(false)
 const selectedSensor = ref(null)
 const sensorToDelete = ref(null)
 const historyData = ref([])
-const selectedFloor = ref(null)
-const selectedRoom = ref(null)
-const assigning = ref(false)
 const deleting = ref(false)
-
-// Get rooms filtered by floor
-const filteredRooms = computed(() => {
-  if (!selectedFloor.value) return []
-  return rooms.value
-    .filter(r => r.floor === selectedFloor.value && r.type !== 'utility')
-    .map(r => ({
-      ...r,
-      displayName: `${r.id} - ${r.name}`
-    }))
-})
-
-// Get room name from ID
-function getRoomName(location) {
-  const room = rooms.value.find(r => r.id === location)
-  return room ? `${room.id} - ${room.name}` : location
-}
 
 function getSensorIcon(type) {
   const icons = {
@@ -323,45 +236,6 @@ function formatTime(time) {
     hour: '2-digit',
     minute: '2-digit'
   })
-}
-
-// Open assign dialog
-function openAssignDialog(sensor) {
-  selectedSensor.value = sensor
-  selectedFloor.value = null
-  selectedRoom.value = null
-  assignDialog.value = true
-}
-
-// Assign sensor to room
-async function assignSensorToRoom() {
-  if (!selectedSensor.value || !selectedRoom.value) return
-  
-  assigning.value = true
-  try {
-    // Update sensor location in backend
-    await axios.put(`/api/sensors/${selectedSensor.value.id}`, {
-      location: selectedRoom.value
-    })
-    
-    // Also add to placed_sensors for 3D visualization
-    await buildingStore.addSensor({
-      type: selectedSensor.value.type,
-      roomId: selectedRoom.value,
-      name: selectedSensor.value.name,
-      x: 0.5,
-      y: 0.5
-    })
-    
-    // Refresh sensors list
-    await sensorsStore.fetchSensors()
-    
-    assignDialog.value = false
-  } catch (e) {
-    console.error('Failed to assign sensor:', e)
-  } finally {
-    assigning.value = false
-  }
 }
 
 async function showHistory(sensor) {

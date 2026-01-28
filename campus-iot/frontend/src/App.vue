@@ -175,7 +175,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from 'vuetify'
 import { getNavRoutes } from '@/router'
@@ -189,16 +189,31 @@ import { useNotifications } from '@/composables/useNotifications'
 import { storeToRefs } from 'pinia'
 import NotificationCenter from '@/components/NotificationCenter.vue'
 
-// Theme
+// Theme - with localStorage persistence
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
-const toggleTheme = () => {
-  theme.global.name.value = isDark.value ? 'light' : 'dark'
+
+// Load saved theme from localStorage
+const savedTheme = localStorage.getItem('campus-iot-theme')
+if (savedTheme) {
+  theme.global.name.value = savedTheme
 }
 
-// Navigation
+const toggleTheme = () => {
+  const newTheme = isDark.value ? 'light' : 'dark'
+  theme.global.name.value = newTheme
+  localStorage.setItem('campus-iot-theme', newTheme)
+}
+
+// Navigation - with localStorage persistence
 const drawer = ref(true)
-const rail = ref(false)
+const savedRail = localStorage.getItem('campus-iot-rail')
+const rail = ref(savedRail === 'true')
+
+// Watch rail changes to save to localStorage
+watch(rail, (newVal) => {
+  localStorage.setItem('campus-iot-rail', String(newVal))
+})
 const route = useRoute()
 const router = useRouter()
 const currentRoute = computed(() => route)

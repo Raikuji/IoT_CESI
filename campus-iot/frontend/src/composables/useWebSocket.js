@@ -3,6 +3,7 @@ import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
 import { useBuildingStore } from '@/stores/building'
 import { useSettingsStore } from '@/stores/settings'
+import { useActivityStore } from '@/stores/activity'
 
 // Global message listeners
 const messageListeners = new Set()
@@ -17,6 +18,7 @@ export function useWebSocket() {
   const alertsStore = useAlertsStore()
   const buildingStore = useBuildingStore()
   const settingsStore = useSettingsStore()
+  const activityStore = useActivityStore()
 
   function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -112,6 +114,11 @@ export function useWebSocket() {
       case 'actuator_command':
         // Notify listeners about new actuator command
         messageListeners.forEach(listener => listener(message))
+        break
+      
+      case 'activity_log':
+        // New activity log received - update store
+        activityStore.handleNewLog(message.log)
         break
       
       default:

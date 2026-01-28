@@ -91,7 +91,8 @@
       <!-- Temperature -->
       <v-col cols="12" sm="6" lg="4">
         <v-card 
-          class="glow-card h-100 sensor-card" 
+          class="glow-card h-100 sensor-card"
+          color="surface"
           :style="getTemperatureGradient(roomTemperature?.latest_value)"
         >
           <v-card-text class="pa-5">
@@ -130,7 +131,8 @@
       <!-- Humidity -->
       <v-col cols="12" sm="6" lg="4">
         <v-card 
-          class="glow-card h-100 sensor-card" 
+          class="glow-card h-100 sensor-card"
+          color="surface"
           :style="getHumidityGradient(roomHumidity?.latest_value)"
         >
           <v-card-text class="pa-5">
@@ -169,7 +171,8 @@
       <!-- Presence -->
       <v-col cols="12" sm="6" lg="4">
         <v-card 
-          class="glow-card h-100 sensor-card" 
+          class="glow-card h-100 sensor-card"
+          color="surface"
           :style="getPresenceGradient(roomPresence?.latest_value)"
         >
           <v-card-text class="pa-5">
@@ -552,7 +555,6 @@ function getTemperatureColor(value) {
 function getTemperatureGradient(value) {
   const color = getTemperatureColor(value)
   return {
-    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
     borderLeft: `3px solid ${color}`,
     boxShadow: `0 4px 20px ${color}22`
   }
@@ -576,7 +578,6 @@ function getHumidityColor(value) {
 function getHumidityGradient(value) {
   const color = getHumidityColor(value)
   return {
-    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
     borderLeft: `3px solid ${color}`,
     boxShadow: `0 4px 20px ${color}22`
   }
@@ -585,7 +586,6 @@ function getHumidityGradient(value) {
 function getPresenceGradient(value) {
   const color = value ? '#22c55e' : '#6b7280'
   return {
-    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
     borderLeft: `3px solid ${color}`,
     boxShadow: value ? `0 4px 20px ${color}22` : 'none'
   }

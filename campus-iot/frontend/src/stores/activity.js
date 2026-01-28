@@ -80,6 +80,25 @@ export const useActivityStore = defineStore('activity', () => {
   // Get recent logs
   const recentLogs = computed(() => logs.value.slice(0, 20))
 
+  // Handle WebSocket activity log
+  function handleNewLog(logData) {
+    const logEntry = {
+      ...logData,
+      ...actionTypes[logData.action]
+    }
+    
+    // Add to beginning if not already present
+    const exists = logs.value.find(l => l.id === logEntry.id)
+    if (!exists) {
+      logs.value.unshift(logEntry)
+      
+      // Keep only last 200 logs
+      if (logs.value.length > 200) {
+        logs.value = logs.value.slice(0, 200)
+      }
+    }
+  }
+
   return {
     logs,
     loading,
@@ -87,6 +106,7 @@ export const useActivityStore = defineStore('activity', () => {
     addLog,
     fetchLogs,
     getLogsByType,
-    recentLogs
+    recentLogs,
+    handleNewLog
   }
 })
