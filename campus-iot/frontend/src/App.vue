@@ -3,7 +3,11 @@
     <!-- Login/Register pages (no nav) -->
     <template v-if="currentRoute?.meta?.hideNav">
       <v-main>
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition name="fade-slide" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </v-main>
     </template>
 
@@ -145,8 +149,9 @@
               :content="alertCount"
               :model-value="alertCount > 0"
               color="error"
+              :class="{ 'notification-badge': alertCount > 0 }"
             >
-              <v-icon>mdi-bell-outline</v-icon>
+              <v-icon :class="{ 'bell-ring': alertCount > 0 }">mdi-bell-outline</v-icon>
             </v-badge>
           </v-btn>
         </template>
@@ -156,7 +161,7 @@
       <v-main class="bg-background">
         <v-container fluid class="pa-6">
           <router-view v-slot="{ Component }">
-            <transition name="fade" mode="out-in">
+            <transition name="page" mode="out-in">
               <component :is="Component" />
             </transition>
           </router-view>

@@ -26,6 +26,9 @@ export const useBuildingStore = defineStore('building', () => {
     { id: 'X006', name: 'Salle', floor: 'RDC', x: 106, y: 8, width: 20, height: 22, type: 'classroom', capacity: 12, area: 27 },
     { id: 'X007', name: 'Salle 03', floor: 'RDC', x: 128, y: 8, width: 24, height: 22, type: 'classroom', capacity: 20, area: 38 },
     
+    // Espace détente - s'étend sur toute la hauteur à droite
+    { id: 'X008', name: 'Détente élèves', floor: 'RDC', x: 156, y: 8, width: 38, height: 74, type: 'common', capacity: 30, area: 120 },
+    
     // Côté SUD (bas du plan) - de gauche à droite
     { id: 'HALL_CESI', name: 'Hall CESI', floor: 'RDC', x: 4, y: 32, width: 20, height: 22, type: 'common', capacity: 20, area: 20 },
     { id: 'SAS', name: 'SAS', floor: 'RDC', x: 4, y: 56, width: 12, height: 18, type: 'common', capacity: 5, area: 13 },
@@ -38,10 +41,9 @@ export const useBuildingStore = defineStore('building', () => {
     { id: 'WCH_RDC', name: 'WC H', floor: 'RDC', x: 110, y: 56, width: 12, height: 16, type: 'utility', capacity: 0, area: 13 },
     { id: 'RGT', name: 'Rgt', floor: 'RDC', x: 124, y: 56, width: 12, height: 16, type: 'utility', capacity: 0, area: 6 },
     { id: 'X009', name: 'Rangement', floor: 'RDC', x: 138, y: 56, width: 16, height: 22, type: 'utility', capacity: 0, area: 26 },
-    { id: 'X008', name: 'Détente élèves', floor: 'RDC', x: 156, y: 56, width: 38, height: 26, type: 'common', capacity: 30, area: 43 },
     
-    // Couloir central RDC (aligné avec Hall CESI)
-    { id: 'HALL_RDC', name: 'Couloir', floor: 'RDC', x: 26, y: 32, width: 168, height: 22, type: 'common', capacity: 50, area: 200 },
+    // Couloir central RDC (réduit pour laisser place à X008)
+    { id: 'HALL_RDC', name: 'Couloir', floor: 'RDC', x: 26, y: 32, width: 126, height: 22, type: 'common', capacity: 50, area: 150 },
 
     // ============ R+1 - Premier étage ============
     // Côté NORD (haut du plan) - de gauche à droite

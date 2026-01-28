@@ -90,23 +90,33 @@
     <v-row>
       <!-- Temperature -->
       <v-col cols="12" sm="6" lg="4">
-        <v-card class="glow-card h-100" color="surface">
+        <v-card 
+          class="glow-card h-100 sensor-card" 
+          :style="getTemperatureGradient(roomTemperature?.latest_value)"
+        >
           <v-card-text class="pa-5">
             <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar color="error" variant="tonal" size="48">
+              <v-avatar :color="getTemperatureColor(roomTemperature?.latest_value)" variant="tonal" size="48" class="sensor-icon">
                 <v-icon size="24">mdi-thermometer</v-icon>
               </v-avatar>
               <span :class="['status-dot', getStatus(roomTemperature)]"></span>
             </div>
-            <div class="sensor-value temperature mb-2">
+            <div class="sensor-value temperature mb-2" :style="{ color: getTemperatureColor(roomTemperature?.latest_value) }">
               {{ formatValue(roomTemperature?.latest_value, 1) }}
               <span class="text-body-1 text-medium-emphasis">°C</span>
             </div>
             <div class="text-body-2 text-medium-emphasis">Température</div>
+            <v-progress-linear 
+              :model-value="getTemperaturePercent(roomTemperature?.latest_value)" 
+              :color="getTemperatureColor(roomTemperature?.latest_value)"
+              height="4"
+              rounded
+              class="mt-3"
+            />
             <v-chip 
               v-if="roomTemperature?.location" 
               size="x-small" 
-              color="error" 
+              :color="getTemperatureColor(roomTemperature?.latest_value)" 
               variant="tonal" 
               class="mt-2"
             >
@@ -119,23 +129,33 @@
 
       <!-- Humidity -->
       <v-col cols="12" sm="6" lg="4">
-        <v-card class="glow-card h-100" color="surface">
+        <v-card 
+          class="glow-card h-100 sensor-card" 
+          :style="getHumidityGradient(roomHumidity?.latest_value)"
+        >
           <v-card-text class="pa-5">
             <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar color="info" variant="tonal" size="48">
+              <v-avatar :color="getHumidityColor(roomHumidity?.latest_value)" variant="tonal" size="48" class="sensor-icon">
                 <v-icon size="24">mdi-water-percent</v-icon>
               </v-avatar>
               <span :class="['status-dot', getStatus(roomHumidity)]"></span>
             </div>
-            <div class="sensor-value humidity mb-2">
+            <div class="sensor-value humidity mb-2" :style="{ color: getHumidityColor(roomHumidity?.latest_value) }">
               {{ formatValue(roomHumidity?.latest_value, 0) }}
               <span class="text-body-1 text-medium-emphasis">%</span>
             </div>
             <div class="text-body-2 text-medium-emphasis">Humidité</div>
+            <v-progress-linear 
+              :model-value="roomHumidity?.latest_value || 0" 
+              :color="getHumidityColor(roomHumidity?.latest_value)"
+              height="4"
+              rounded
+              class="mt-3"
+            />
             <v-chip 
               v-if="roomHumidity?.location" 
               size="x-small" 
-              color="info" 
+              :color="getHumidityColor(roomHumidity?.latest_value)" 
               variant="tonal" 
               class="mt-2"
             >
@@ -148,24 +168,27 @@
 
       <!-- Presence -->
       <v-col cols="12" sm="6" lg="4">
-        <v-card class="glow-card h-100" color="surface">
+        <v-card 
+          class="glow-card h-100 sensor-card" 
+          :style="getPresenceGradient(roomPresence?.latest_value)"
+        >
           <v-card-text class="pa-5">
             <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar color="success" variant="tonal" size="48">
+              <v-avatar :color="roomPresence?.latest_value ? 'success' : 'grey'" variant="tonal" size="48" class="sensor-icon">
                 <v-icon size="24">mdi-motion-sensor</v-icon>
               </v-avatar>
               <span :class="['status-dot', getStatus(roomPresence)]"></span>
             </div>
-            <div class="sensor-value presence mb-2">
+            <div class="sensor-value presence mb-2" :class="roomPresence?.latest_value ? 'text-success' : 'text-grey'">
               {{ roomPresence?.latest_value ? 'Oui' : 'Non' }}
             </div>
             <div class="text-body-2 text-medium-emphasis">Présence détectée</div>
             <v-chip 
               v-if="roomPresence?.location" 
               size="x-small" 
-              color="success" 
+              :color="roomPresence?.latest_value ? 'success' : 'grey'" 
               variant="tonal" 
-              class="mt-2"
+              class="mt-3"
             >
               <v-icon start size="12">mdi-map-marker</v-icon>
               {{ roomPresence.location }}
@@ -515,6 +538,58 @@ const chartSeries = computed(() => [{
   name: 'Température',
   data: chartData.value
 }])
+
+// Color gradient helpers
+function getTemperatureColor(value) {
+  if (value === null || value === undefined) return '#888888'
+  if (value < 18) return '#3b82f6' // Cold - blue
+  if (value < 20) return '#22c55e' // Cool - green
+  if (value <= 23) return '#22c55e' // Optimal - green
+  if (value <= 26) return '#f59e0b' // Warm - orange
+  return '#ef4444' // Hot - red
+}
+
+function getTemperatureGradient(value) {
+  const color = getTemperatureColor(value)
+  return {
+    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
+    borderLeft: `3px solid ${color}`,
+    boxShadow: `0 4px 20px ${color}22`
+  }
+}
+
+function getTemperaturePercent(value) {
+  if (value === null || value === undefined) return 0
+  // Map 15-30°C to 0-100%
+  return Math.min(100, Math.max(0, ((value - 15) / 15) * 100))
+}
+
+function getHumidityColor(value) {
+  if (value === null || value === undefined) return '#888888'
+  if (value < 30) return '#f59e0b' // Too dry - orange
+  if (value < 40) return '#22c55e' // Slightly dry - green
+  if (value <= 60) return '#22c55e' // Optimal - green
+  if (value <= 70) return '#3b82f6' // Humid - blue
+  return '#ef4444' // Too humid - red
+}
+
+function getHumidityGradient(value) {
+  const color = getHumidityColor(value)
+  return {
+    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
+    borderLeft: `3px solid ${color}`,
+    boxShadow: `0 4px 20px ${color}22`
+  }
+}
+
+function getPresenceGradient(value) {
+  const color = value ? '#22c55e' : '#6b7280'
+  return {
+    background: `linear-gradient(135deg, rgba(30,30,35,0.95) 0%, rgba(30,30,35,0.8) 100%)`,
+    borderLeft: `3px solid ${color}`,
+    boxShadow: value ? `0 4px 20px ${color}22` : 'none'
+  }
+}
 
 // Helpers
 function formatValue(value, decimals = 1) {

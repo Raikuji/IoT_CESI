@@ -19,7 +19,8 @@ from api import (
     actuators_router,
     dashboard_router,
     auth_router,
-    activity_router
+    activity_router,
+    reports_router
 )
 from api.security import router as security_router
 
@@ -170,6 +171,7 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
 
 
 @app.get("/")

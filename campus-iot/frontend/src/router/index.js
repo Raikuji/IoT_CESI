@@ -31,9 +31,9 @@ const routes = [
   {
     path: '/building',
     name: 'Building',
-    component: () => import('@/views/BuildingView.vue'),
+    component: () => import('@/views/Building3DView.vue'),
     meta: { 
-      icon: 'mdi-office-building', 
+      icon: 'mdi-cube-scan', 
       title: 'Bâtiment Orion', 
       requiresAuth: true,
       permission: 'building'

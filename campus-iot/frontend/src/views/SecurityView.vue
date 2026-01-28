@@ -18,9 +18,25 @@
             </div>
             
             <div class="security-score">
-              <div class="score-circle" :class="securityScoreClass">
-                <span class="score-value">{{ stats.security_score || 100 }}</span>
-                <span class="score-label">Score</span>
+              <div class="score-ring" :class="securityScoreClass">
+                <svg viewBox="0 0 100 100">
+                  <circle class="score-bg" cx="50" cy="50" r="42" />
+                  <circle 
+                    class="score-progress" 
+                    cx="50" 
+                    cy="50" 
+                    r="42"
+                    :style="{ strokeDasharray: `${(stats.security_score || 100) * 2.64} 264` }"
+                  />
+                </svg>
+                <div class="score-content">
+                  <span class="score-value">{{ stats.security_score || 100 }}</span>
+                  <span class="score-label">Score</span>
+                </div>
+              </div>
+              <!-- Confetti for 100% score -->
+              <div v-if="(stats.security_score || 100) >= 100" class="confetti-container">
+                <div v-for="i in 12" :key="i" class="confetti" :style="{ '--i': i }"></div>
               </div>
             </div>
           </v-card-text>
@@ -107,11 +123,13 @@
           
           <v-card-text>
             <div class="blockchain-chain" v-if="blocks.length > 0">
+              <transition-group name="block-enter" appear>
               <div
                 v-for="(block, index) in blocks"
                 :key="block.id"
                 class="block-item"
                 :class="{ 'genesis': block.index === 0 }"
+                :style="{ '--delay': `${index * 0.1}s` }"
               >
                 <div class="block-header">
                   <v-chip
@@ -146,6 +164,7 @@
                   <v-icon size="20" color="primary">mdi-arrow-down</v-icon>
                 </div>
               </div>
+              </transition-group>
             </div>
             
             <v-alert v-else type="info" variant="tonal">
@@ -444,40 +463,119 @@ onMounted(() => {
 }
 
 .security-score {
-  .score-circle {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border: 3px solid;
+  position: relative;
+  
+  .score-ring {
+    width: 100px;
+    height: 100px;
+    position: relative;
+    
+    svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+      
+      circle {
+        fill: none;
+        stroke-width: 6;
+        stroke-linecap: round;
+      }
+      
+      .score-bg {
+        stroke: rgba(255, 255, 255, 0.1);
+      }
+      
+      .score-progress {
+        stroke: currentColor;
+        transition: stroke-dasharray 1s ease;
+        animation: score-fill 1.5s ease forwards;
+      }
+    }
+    
+    .score-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
     
     &.score-good {
-      border-color: #4caf50;
-      .score-value { color: #4caf50; }
+      color: #22c55e;
+      .score-value { color: #22c55e; }
     }
     
     &.score-warning {
-      border-color: #ff9800;
-      .score-value { color: #ff9800; }
+      color: #f59e0b;
+      .score-value { color: #f59e0b; }
     }
     
     &.score-danger {
-      border-color: #f44336;
-      .score-value { color: #f44336; }
+      color: #ef4444;
+      .score-value { color: #ef4444; }
     }
     
     .score-value {
       font-size: 1.5rem;
       font-weight: bold;
+      display: block;
     }
     
     .score-label {
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       opacity: 0.7;
     }
+  }
+  
+  .confetti-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    
+    .confetti {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      animation: confetti-burst 2s ease-out infinite;
+      animation-delay: calc(var(--i) * 0.1s);
+      
+      &:nth-child(1) { background: #ff6b6b; }
+      &:nth-child(2) { background: #ffa502; }
+      &:nth-child(3) { background: #22c55e; }
+      &:nth-child(4) { background: #3b82f6; }
+      &:nth-child(5) { background: #a855f7; }
+      &:nth-child(6) { background: #00d4ff; }
+      &:nth-child(7) { background: #ff6b6b; }
+      &:nth-child(8) { background: #ffa502; }
+      &:nth-child(9) { background: #22c55e; }
+      &:nth-child(10) { background: #3b82f6; }
+      &:nth-child(11) { background: #a855f7; }
+      &:nth-child(12) { background: #00d4ff; }
+    }
+  }
+}
+
+@keyframes score-fill {
+  from {
+    stroke-dasharray: 0 264;
+  }
+}
+
+@keyframes confetti-burst {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(
+      calc(cos(var(--i) * 30deg) * 60px),
+      calc(sin(var(--i) * 30deg) * 60px - 20px)
+    ) rotate(360deg) scale(0);
+    opacity: 0;
   }
 }
 
@@ -503,11 +601,36 @@ onMounted(() => {
   gap: 8px;
 }
 
+// Block animation
+.block-enter-enter-active {
+  animation: block-slide-in 0.5s ease forwards;
+  animation-delay: var(--delay);
+  opacity: 0;
+}
+
+@keyframes block-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 .block-item {
   background: rgba(var(--v-theme-surface-variant), 0.3);
   border-radius: 8px;
   padding: 12px;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateX(4px);
+    border-color: rgba(var(--v-theme-primary), 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
   
   &.genesis {
     border-color: rgba(156, 39, 176, 0.5);
