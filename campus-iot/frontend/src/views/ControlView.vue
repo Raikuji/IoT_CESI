@@ -326,18 +326,26 @@ function broadcastChange(key, value) {
 async function sendHeatingCommand() {
   sendingCommand.value = true
   try {
-    // Save the value
+    // Save the value in settings
     await axios.put('/api/settings/heating_value', {
       value: String(heatingValue.value)
     })
     
-    // Send command to actuator
-    await axios.post('/api/actuators/1/command', {
-      value: heatingValue.value,
-      source: 'manual'
-    })
+    // Try to send command to actuator if one exists
+    try {
+      const actuators = await axios.get('/api/actuators/')
+      if (actuators.data.length > 0) {
+        await axios.post(`/api/actuators/${actuators.data[0].id}/command`, {
+          value: heatingValue.value,
+          source: 'manual'
+        })
+        await fetchCommandHistory()
+      }
+    } catch (actuatorError) {
+      // No actuator configured - settings are still saved
+      console.log('No actuator configured, settings saved')
+    }
     
-    await fetchCommandHistory()
     broadcastChange('heating_value', heatingValue.value)
   } catch (e) {
     console.error('Failed to send command:', e)
@@ -364,12 +372,23 @@ async function sendSetpoint() {
 
 async function fetchCommandHistory() {
   try {
-    const response = await axios.get('/api/actuators/1/commands', {
+    // First check if actuator exists
+    const actuators = await axios.get('/api/actuators/')
+    if (actuators.data.length === 0) {
+      // No actuators yet - that's fine, just show empty history
+      commandHistory.value = []
+      return
+    }
+    
+    // Get commands from first actuator
+    const actuatorId = actuators.data[0].id
+    const response = await axios.get(`/api/actuators/${actuatorId}/commands`, {
       params: { limit: 10 }
     })
     commandHistory.value = response.data
   } catch (e) {
-    console.error('Failed to fetch command history:', e)
+    // Silently handle - no actuators configured yet
+    commandHistory.value = []
   }
 }
 
