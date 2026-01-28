@@ -41,30 +41,33 @@ class MQTTService:
             payload = msg.payload.decode('utf-8')
             logger.info(f"[MQTT] Received: {topic} = {payload}")
             
-            # Parse the message
-            try:
-                value = float(payload)
-            except ValueError:
-                try:
-                    data = json.loads(payload)
-                    value = data.get('value', data)
-                except json.JSONDecodeError:
-                    value = payload
-            
             # Extract sensor type from topic
             # Format: campus/orion/sensors/{TYPE}
-            # Example: campus/orion/sensors/temperature
             parts = topic.split('/')
-            
-            # Get sensor type (last part of topic)
             sensor_type = parts[-1] if len(parts) > 0 else "unknown"
             
-            # Get room from JSON payload if available
+            # Default values
             room_id = "unknown"
-            if isinstance(value, dict):
-                room_id = value.get('room', value.get('room_id', 'unknown'))
-                # Extract actual value from dict
-                value = value.get('value', value.get('temperature', value.get('humidity', value.get('distance', 0))))
+            value = 0
+            
+            # Parse the payload
+            try:
+                # Try to parse as JSON first (expected format: {"room": "X101", "value": 23.5})
+                data = json.loads(payload)
+                if isinstance(data, dict):
+                    # Extract room from JSON
+                    room_id = data.get('room', data.get('room_id', 'unknown'))
+                    # Extract value from JSON
+                    value = data.get('value', data.get('temperature', data.get('humidity', data.get('distance', 0))))
+                else:
+                    # JSON but not a dict (e.g., just a number)
+                    value = float(data)
+            except json.JSONDecodeError:
+                # Not JSON, try as plain number
+                try:
+                    value = float(payload)
+                except ValueError:
+                    value = payload
             
             logger.info(f"[MQTT] Room: {room_id}, Type: {sensor_type}, Value: {value}")
             
