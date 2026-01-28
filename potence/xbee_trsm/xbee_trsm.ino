@@ -118,11 +118,15 @@ void loop() {
   }
 
   double temp = (double)celsius/100.0;
-  char tempString[8];
+  char tempString[6];
   dtostrf(temp, 1, 2, tempString);
-  Serial.println(tempString);
+  char payloadTemp[100] = "\0";
+  strcat(payloadTemp, "{\"room\":\"X003\",\"value\":");
+  strcat(payloadTemp, tempString);
+  strcat(payloadTemp, "}");
+  Serial.println(payloadTemp);
 
-  publish(topic_pub, tempString, nameMQTT);
+  publish(topic_pub, payloadTemp, nameMQTT);
   
   delay(5000); // Envoi toutes les secondes
 }
