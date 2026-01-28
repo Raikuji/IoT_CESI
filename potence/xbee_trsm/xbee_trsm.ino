@@ -126,6 +126,9 @@ void loop() {
   strcat(payloadTemp, "}");
   Serial.println(payloadTemp);
 
+  if(!client.connected()) {
+    client.connect(nameMQTT);
+  }
   publish(topic_pub, payloadTemp, nameMQTT);
   
   delay(5000); // Envoi toutes les secondes
