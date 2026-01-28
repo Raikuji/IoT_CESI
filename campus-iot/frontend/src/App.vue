@@ -182,6 +182,8 @@ import { getNavRoutes } from '@/router'
 import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
 import { useAuthStore } from '@/stores/auth'
+import { useBuildingStore } from '@/stores/building'
+import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { storeToRefs } from 'pinia'
@@ -219,6 +221,8 @@ const navRoutes = computed(() => {
 // Stores
 const sensorsStore = useSensorsStore()
 const alertsStore = useAlertsStore()
+const buildingStore = useBuildingStore()
+const settingsStore = useSettingsStore()
 
 // WebSocket
 const { connected: wsConnected } = useWebSocket()
@@ -252,8 +256,13 @@ onMounted(async () => {
   
   // Fetch data if authenticated
   if (authStore.isAuthenticated) {
-    await sensorsStore.fetchSensors()
-    await alertsStore.fetchAlerts()
+    // Fetch all synced data in parallel
+    await Promise.all([
+      sensorsStore.fetchSensors(),
+      alertsStore.fetchAlerts(),
+      buildingStore.fetchSensors(),  // Placed sensors from Supabase
+      settingsStore.fetchSettings()   // System settings from Supabase
+    ])
   }
 })
 </script>

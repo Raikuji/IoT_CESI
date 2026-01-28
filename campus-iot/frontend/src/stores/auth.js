@@ -9,6 +9,17 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref(null)
   const roles = ref({})
+  
+  // User preferences (synced with Supabase)
+  const preferences = ref({
+    theme: 'dark',
+    default_floor: 'RDC',
+    notifications_enabled: true,
+    email_alerts: false,
+    sound_alerts: true,
+    dashboard_layout: {},
+    favorite_rooms: []
+  })
 
   // Getters
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -41,10 +52,73 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         await fetchUser()
         await fetchRoles()
+        await fetchPreferences()
       } catch (e) {
         logout()
       }
     }
+  }
+  
+  // Fetch user preferences from API
+  async function fetchPreferences() {
+    if (!token.value) return
+    
+    try {
+      const response = await axios.get('/api/settings/preferences')
+      preferences.value = response.data
+      
+      // Apply theme
+      if (preferences.value.theme) {
+        document.documentElement.setAttribute('data-theme', preferences.value.theme)
+      }
+    } catch (e) {
+      console.error('Failed to fetch preferences:', e)
+    }
+  }
+  
+  // Update user preferences
+  async function updatePreferences(data) {
+    try {
+      const response = await axios.put('/api/settings/preferences', data)
+      preferences.value = response.data
+      
+      // Apply theme if changed
+      if (data.theme) {
+        document.documentElement.setAttribute('data-theme', data.theme)
+      }
+      
+      return { success: true }
+    } catch (e) {
+      console.error('Failed to update preferences:', e)
+      return { success: false, error: e.response?.data?.detail || e.message }
+    }
+  }
+  
+  // Add room to favorites
+  async function addFavoriteRoom(roomId) {
+    try {
+      const response = await axios.post(`/api/settings/preferences/favorite-room/${roomId}`)
+      preferences.value.favorite_rooms = response.data.favorites
+      return { success: true }
+    } catch (e) {
+      return { success: false }
+    }
+  }
+  
+  // Remove room from favorites
+  async function removeFavoriteRoom(roomId) {
+    try {
+      const response = await axios.delete(`/api/settings/preferences/favorite-room/${roomId}`)
+      preferences.value.favorite_rooms = response.data.favorites
+      return { success: true }
+    } catch (e) {
+      return { success: false }
+    }
+  }
+  
+  // Check if room is favorite
+  function isRoomFavorite(roomId) {
+    return preferences.value.favorite_rooms?.includes(roomId) || false
   }
 
   // Fetch available roles
@@ -187,6 +261,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     roles,
+    preferences,
     isAuthenticated,
     isAdmin,
     isTechnician,
@@ -196,6 +271,11 @@ export const useAuthStore = defineStore('auth', () => {
     hasPermission,
     initAuth,
     fetchRoles,
+    fetchPreferences,
+    updatePreferences,
+    addFavoriteRoom,
+    removeFavoriteRoom,
+    isRoomFavorite,
     login,
     register,
     fetchUser,

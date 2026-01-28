@@ -1,6 +1,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
+import { useBuildingStore } from '@/stores/building'
+import { useSettingsStore } from '@/stores/settings'
 
 export function useWebSocket() {
   const ws = ref(null)
@@ -10,6 +12,8 @@ export function useWebSocket() {
 
   const sensorsStore = useSensorsStore()
   const alertsStore = useAlertsStore()
+  const buildingStore = useBuildingStore()
+  const settingsStore = useSettingsStore()
 
   function connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -51,15 +55,52 @@ export function useWebSocket() {
           message.data.value,
           message.data.timestamp
         )
+        // Also update placed sensor if exists
+        if (message.data.room_id) {
+          buildingStore.updateSensorByTypeAndRoom(
+            message.data.sensor_type,
+            message.data.room_id,
+            message.data.value
+          )
+        }
         break
       
       case 'alert':
         alertsStore.addAlert(message.data)
-        // Could trigger a notification here
         break
       
       case 'actuator_status':
         // Handle actuator updates
+        break
+      
+      // ============ SYNC EVENTS ============
+      
+      // Placed sensors sync
+      case 'sensor_placed':
+        buildingStore.handleSensorPlaced(message.sensor)
+        break
+      
+      case 'sensor_updated':
+        buildingStore.handleSensorUpdated(message.sensor)
+        break
+      
+      case 'sensor_removed':
+        buildingStore.handleSensorRemoved(message)
+        break
+      
+      case 'sensors_bulk_placed':
+        // Refresh all sensors
+        buildingStore.fetchSensors()
+        break
+      
+      // Settings sync
+      case 'setting_changed':
+        settingsStore.handleSettingChanged(message)
+        break
+      
+      case 'settings_bulk_changed':
+        // Refresh all settings
+        settingsStore.fetchSettings()
         break
       
       default:

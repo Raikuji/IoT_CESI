@@ -23,6 +23,8 @@ from api import (
     reports_router
 )
 from api.security import router as security_router
+from api.placed_sensors import router as placed_sensors_router
+from api.settings import router as settings_router
 
 # Configure logging
 logging.basicConfig(
@@ -172,6 +174,8 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
+app.include_router(placed_sensors_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
 
 
 @app.get("/")
