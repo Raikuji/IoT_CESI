@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
+#include "../lib/hmac_security.h"
 
 #define xbeeSerial Serial1
 
@@ -23,6 +24,10 @@ const float HUM_MAX = 60.0;
 const char* DEVICE_ID = "bme280_001";
 const char* ROOM = "X101";        // Room where this sensor is located
 const char* BUILDING = "orion";   // Building name
+
+// Security - HMAC signature (same key as backend!)
+const char* HMAC_SECRET = "campus-orion-iot-secret-2024";
+HMACSecurity hmac(HMAC_SECRET);
 
 void setup() {
   Serial.begin(9600);
@@ -93,8 +98,21 @@ void sendData(float temp, float hum, bool outOfRange) {
     else if (hum > HUM_MAX) comfort = "humid";
   }
   
-  // Build JSON message for gateway
-  // Gateway will parse this and publish to correct MQTT topics
+  unsigned long timestamp = millis();
+  
+  // Send temperature with HMAC signature
+  String tempSigned = hmac.signSensorData("temperature", temp, timestamp);
+  String tempMsg = "SECURE:" + tempSigned;
+  xbeeSerial.println(tempMsg);
+  Serial.println(tempMsg);
+  
+  // Send humidity with HMAC signature
+  String humSigned = hmac.signSensorData("humidity", hum, timestamp);
+  String humMsg = "SECURE:" + humSigned;
+  xbeeSerial.println(humMsg);
+  Serial.println(humMsg);
+  
+  // Also send full JSON for backward compatibility
   String message = "DATA:{";
   message += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
   message += "\"sensor\":\"bme280\",";
@@ -103,19 +121,17 @@ void sendData(float temp, float hum, bool outOfRange) {
   message += "\"comfort\":\"" + comfort + "\",";
   message += "\"room\":\"" + String(ROOM) + "\",";
   message += "\"building\":\"" + String(BUILDING) + "\",";
-  message += "\"timestamp\":" + String(millis() / 1000);
+  message += "\"timestamp\":" + String(timestamp / 1000);
   message += "}";
   
-  // Send via XBee to gateway
   xbeeSerial.println(message);
   
-  // Also print to USB serial for debugging
-  Serial.println(message);
   Serial.print(F("  -> "));
   Serial.print(temp, 1);
   Serial.print(F(" C | "));
   Serial.print(hum, 1);
   Serial.print(F(" % | "));
-  Serial.println(comfort);
+  Serial.print(comfort);
+  Serial.println(F(" [SIGNED]"));
   Serial.println();
 }

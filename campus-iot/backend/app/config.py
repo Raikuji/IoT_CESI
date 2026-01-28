@@ -10,18 +10,18 @@ class Settings(BaseSettings):
     app_name: str = "Campus IoT API"
     debug: bool = True
     
-    # Database
-    database_url: str = "postgresql://campus:campus_secret@localhost:5432/campus_iot"
+    # Database (Supabase Session pooler)
+    database_url: str = "postgresql://postgres.byseujemkgwqlxtkstge:IOTCESI2026@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
     
     # MQTT
-    mqtt_broker: str = "mosquitto"  # Docker container name
+    mqtt_broker: str = "mosquitto" 
     mqtt_port: int = 1883
-    mqtt_topic_prefix: str = "campus/orion"  # Will subscribe to campus/orion/sensors/#
+    mqtt_topic_prefix: str = "campus/orion"  
     
     # Auth
     secret_key: str = "super_secret_key_change_me"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24  # 24 hours
+    access_token_expire_minutes: int = 60 * 24 
     
     class Config:
         env_file = ".env"

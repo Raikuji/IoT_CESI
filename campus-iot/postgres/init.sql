@@ -102,6 +102,41 @@ CREATE INDEX IF NOT EXISTS idx_sensor_data_sensor ON sensor_data (sensor_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alerts (is_acknowledged);
 
+-- Blockchain table (for data integrity)
+CREATE TABLE IF NOT EXISTS blockchain (
+    id SERIAL PRIMARY KEY,
+    index INTEGER UNIQUE NOT NULL,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    sensor_type VARCHAR(50),
+    sensor_value VARCHAR(100),
+    data_hash VARCHAR(64) NOT NULL,
+    previous_hash VARCHAR(64) NOT NULL,
+    hash VARCHAR(64) UNIQUE NOT NULL,
+    nonce INTEGER DEFAULT 0,
+    signature_valid BOOLEAN DEFAULT true,
+    source_ip VARCHAR(45)
+);
+
+-- Security alerts table
+CREATE TABLE IF NOT EXISTS security_alerts (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    alert_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) DEFAULT 'warning',
+    description TEXT,
+    raw_data TEXT,
+    source_ip VARCHAR(45),
+    resolved BOOLEAN DEFAULT false,
+    resolved_at TIMESTAMPTZ,
+    resolved_by VARCHAR(100)
+);
+
+-- Indexes for blockchain
+CREATE INDEX IF NOT EXISTS idx_blockchain_index ON blockchain (index);
+CREATE INDEX IF NOT EXISTS idx_blockchain_hash ON blockchain (hash);
+CREATE INDEX IF NOT EXISTS idx_security_alerts_timestamp ON security_alerts (timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_security_alerts_resolved ON security_alerts (resolved);
+
 -- Default admin user (password: admin123)
 INSERT INTO users (username, email, hashed_password, role) VALUES
     ('admin', 'admin@campus.cesi.fr', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G8xvGqJ4x8Kqwi', 'admin')
