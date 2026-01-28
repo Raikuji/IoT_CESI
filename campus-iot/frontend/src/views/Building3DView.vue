@@ -67,8 +67,6 @@
             ref="canvasContainer" 
             class="canvas-container"
             @click="handleCanvasClick"
-            @dragover.prevent="handleDragOver"
-            @drop="handleDrop"
           >
             <!-- Loading overlay -->
             <div v-if="loading" class="loading-overlay">
@@ -87,7 +85,7 @@
             </div>
             
             <!-- Instructions overlay -->
-            <div class="instructions-overlay" v-if="!loading && !selectedRoom">
+            <div class="instructions-overlay" v-if="!loading && !selectedRoom && !repositionMode">
               <v-chip size="small" color="surface" variant="flat" class="instruction-chip">
                 <v-icon start size="14">mdi-gesture-swipe</v-icon>
                 Glisser pour tourner
@@ -100,6 +98,32 @@
                 <v-icon start size="14">mdi-cursor-pointer</v-icon>
                 Cliquer sur une salle
               </v-chip>
+              <v-chip size="small" color="surface" variant="flat" class="instruction-chip">
+                <v-icon start size="14">mdi-chip</v-icon>
+                Cliquer sur un capteur pour le déplacer
+              </v-chip>
+            </div>
+
+            <!-- Reposition mode overlay -->
+            <div class="reposition-overlay" v-if="repositionMode">
+              <v-card class="reposition-card" color="info" variant="elevated">
+                <v-card-text class="d-flex align-center pa-3">
+                  <v-icon start class="pulse-icon">mdi-crosshairs-gps</v-icon>
+                  <div>
+                    <div class="font-weight-bold">Mode repositionnement</div>
+                    <div class="text-caption">Cliquez dans la salle pour placer le capteur</div>
+                  </div>
+                  <v-btn 
+                    icon 
+                    variant="text" 
+                    size="small" 
+                    class="ml-4"
+                    @click="cancelReposition"
+                  >
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </v-card-text>
+              </v-card>
             </div>
 
             <!-- Compass -->
@@ -246,32 +270,6 @@
           </v-card-text>
         </v-card>
 
-        <!-- Sensor Palette -->
-        <v-card class="sensor-palette-card mb-4">
-          <v-card-title class="d-flex align-center">
-            <v-icon start color="primary">mdi-palette</v-icon>
-            Capteurs
-            <v-spacer />
-            <v-chip size="x-small" color="primary" variant="tonal">Glisser-déposer</v-chip>
-          </v-card-title>
-          <v-card-text>
-            <div class="sensor-palette">
-              <div
-                v-for="sensorType in sensorTypes"
-                :key="sensorType.type"
-                class="palette-item"
-                draggable="true"
-                @dragstart="startDrag($event, sensorType)"
-              >
-                <v-avatar :color="sensorType.color" size="36">
-                  <v-icon size="20" color="white">{{ sensorType.icon }}</v-icon>
-                </v-avatar>
-                <span class="palette-label">{{ sensorType.name }}</span>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-
         <!-- Legend -->
         <v-card class="legend-card">
           <v-card-title class="d-flex align-center">
@@ -337,7 +335,7 @@ import ReportIssueDialog from '@/components/ReportIssueDialog.vue'
 
 const buildingStore = useBuildingStore()
 const alertsStore = useAlertsStore()
-const { floors, currentFloorRooms, sensors: buildingSensors, sensorTypes } = storeToRefs(buildingStore)
+const { floors, currentFloorRooms, sensors: buildingSensors } = storeToRefs(buildingStore)
 const { activeAlerts } = storeToRefs(alertsStore)
 
 // State
@@ -348,8 +346,11 @@ const selectedRoom = ref(null)
 const viewMode = ref('normal')
 const showQRDialog = ref(false)
 const showReportDialog = ref(false)
-const draggedSensor = ref(null)
 const snackbar = ref({ show: false, text: '', color: 'success' })
+
+// Sensor repositioning mode
+const repositionMode = ref(false)
+const selectedSensorForReposition = ref(null)
 
 // Three.js objects
 let scene, camera, renderer, controls
@@ -857,12 +858,34 @@ function handleCanvasClick(event) {
   
   raycaster.setFromCamera(mouse, camera)
   
+  // Check if we're in reposition mode
+  if (repositionMode.value && selectedSensorForReposition.value) {
+    handleSensorReposition(event)
+    return
+  }
+  
+  // Check if clicking on a sensor first
+  const sensorMeshList = Object.values(sensorMeshes)
+  const sensorIntersects = raycaster.intersectObjects(sensorMeshList)
+  
+  if (sensorIntersects.length > 0) {
+    const clickedSensor = sensorIntersects[0].object.userData.sensor
+    if (clickedSensor) {
+      startSensorReposition(clickedSensor)
+      return
+    }
+  }
+  
+  // Otherwise check rooms
   const meshes = Object.values(roomMeshes)
   const intersects = raycaster.intersectObjects(meshes)
   
   if (intersects.length > 0) {
     const clickedRoom = intersects[0].object.userData.room
     selectRoom(clickedRoom)
+  } else {
+    // Clicked outside - cancel reposition mode
+    cancelReposition()
   }
 }
 
@@ -921,66 +944,94 @@ function resetCamera() {
   controls.target.set(0, 0, 0)
 }
 
-// Drag and drop for sensors
-function startDrag(event, sensorType) {
-  draggedSensor.value = sensorType
-  event.dataTransfer.effectAllowed = 'copy'
+// Sensor repositioning functions
+function startSensorReposition(sensor) {
+  selectedSensorForReposition.value = sensor
+  repositionMode.value = true
+  
+  // Highlight the sensor
+  const mesh = sensorMeshes[sensor.id]
+  if (mesh) {
+    mesh.material.emissive = new THREE.Color(0x00ff00)
+    mesh.material.emissiveIntensity = 0.5
+  }
+  
+  snackbar.value = {
+    show: true,
+    text: `Cliquez dans la salle pour repositionner "${sensor.name || sensor.type}"`,
+    color: 'info'
+  }
 }
 
-function handleDragOver(event) {
-  event.dataTransfer.dropEffect = 'copy'
-}
-
-function handleDrop(event) {
-  if (!draggedSensor.value || !canvasContainer.value) return
+function handleSensorReposition(event) {
+  if (!selectedSensorForReposition.value) return
   
-  const rect = canvasContainer.value.getBoundingClientRect()
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+  const sensor = selectedSensorForReposition.value
+  const sensorRoom = buildingStore.getRoomById(sensor.room_id)
   
-  raycaster.setFromCamera(mouse, camera)
+  if (!sensorRoom) {
+    cancelReposition()
+    return
+  }
   
-  const meshes = Object.values(roomMeshes)
-  const intersects = raycaster.intersectObjects(meshes)
+  // Get intersection with the room floor
+  const roomMesh = roomMeshes[sensor.room_id]
+  if (!roomMesh) {
+    cancelReposition()
+    return
+  }
+  
+  const intersects = raycaster.intersectObject(roomMesh)
   
   if (intersects.length > 0) {
-    const targetRoom = intersects[0].object.userData.room
-    addSensorToRoom(targetRoom, draggedSensor.value)
+    const point = intersects[0].point
+    
+    // Convert 3D position to relative position within room (0-1)
+    const roomX = sensorRoom.x / 10
+    const roomZ = sensorRoom.y / 10
+    const roomWidth = sensorRoom.width / 10
+    const roomDepth = sensorRoom.height / 10
+    
+    // Calculate relative position (0-1)
+    const relX = (point.x - roomX) / roomWidth
+    const relZ = (point.z - roomZ) / roomDepth
+    
+    // Clamp to room bounds
+    const clampedX = Math.max(0.1, Math.min(0.9, relX))
+    const clampedZ = Math.max(0.1, Math.min(0.9, relZ))
+    
+    // Update sensor position via store (syncs to backend + other users)
+    buildingStore.updateSensorPosition(sensor.id, clampedX, clampedZ, 0)
+    
+    // Update 3D mesh position immediately for feedback
+    const sensorMesh = sensorMeshes[sensor.id]
+    if (sensorMesh) {
+      sensorMesh.position.x = roomX + clampedX * roomWidth
+      sensorMesh.position.z = roomZ + clampedZ * roomDepth
+    }
+    
+    snackbar.value = {
+      show: true,
+      text: `Capteur repositionné !`,
+      color: 'success'
+    }
   }
   
-  draggedSensor.value = null
+  cancelReposition()
 }
 
-function addSensorToRoom(room, sensorType) {
-  buildingStore.addSensor({
-    roomId: room.id,
-    type: sensorType.type,
-    x: 50,
-    y: 50
-  })
-  
-  snackbar.value = {
-    show: true,
-    text: `${sensorType.name} ajouté à ${room.id}`,
-    color: 'success'
+function cancelReposition() {
+  // Remove highlight from sensor
+  if (selectedSensorForReposition.value) {
+    const mesh = sensorMeshes[selectedSensorForReposition.value.id]
+    if (mesh) {
+      mesh.material.emissive = new THREE.Color(0x000000)
+      mesh.material.emissiveIntensity = 0
+    }
   }
   
-  // Rebuild if in sensor view
-  if (viewMode.value === 'sensors') {
-    buildRooms()
-  }
-}
-
-function removeSensor(sensorId) {
-  buildingStore.removeSensor(sensorId)
-  snackbar.value = {
-    show: true,
-    text: 'Capteur supprimé',
-    color: 'warning'
-  }
-  if (viewMode.value === 'sensors') {
-    buildRooms()
-  }
+  repositionMode.value = false
+  selectedSensorForReposition.value = null
 }
 
 // Dialogs
@@ -1255,8 +1306,11 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   z-index: 5;
+  max-width: 90%;
   
   .instruction-chip {
     backdrop-filter: blur(10px);
@@ -1264,6 +1318,33 @@ onUnmounted(() => {
     border: 1px solid rgba(0, 255, 157, 0.3);
     font-size: 11px;
   }
+}
+
+.reposition-overlay {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  
+  .reposition-card {
+    backdrop-filter: blur(10px);
+    animation: pulse-border 1.5s infinite;
+  }
+  
+  .pulse-icon {
+    animation: pulse-scale 1s infinite;
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
+}
+
+@keyframes pulse-scale {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
 
 .compass {
