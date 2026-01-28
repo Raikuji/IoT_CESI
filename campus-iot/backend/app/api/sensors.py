@@ -88,6 +88,7 @@ def create_sensor(sensor: SensorCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{sensor_id}", response_model=SensorResponse)
+@router.put("/{sensor_id}", response_model=SensorResponse)
 def update_sensor(
     sensor_id: int,
     sensor: SensorUpdate,
@@ -105,6 +106,23 @@ def update_sensor(
     db.commit()
     db.refresh(db_sensor)
     return db_sensor
+
+
+@router.delete("/{sensor_id}")
+def delete_sensor(sensor_id: int, db: Session = Depends(get_db)):
+    """Delete a sensor and all its data"""
+    db_sensor = db.query(Sensor).filter(Sensor.id == sensor_id).first()
+    if not db_sensor:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    
+    # Delete all sensor data first
+    db.query(SensorData).filter(SensorData.sensor_id == sensor_id).delete()
+    
+    # Delete the sensor
+    db.delete(db_sensor)
+    db.commit()
+    
+    return {"success": True, "message": f"Sensor {sensor_id} deleted"}
 
 
 @router.get("/{sensor_id}/data", response_model=List[SensorDataResponse])
