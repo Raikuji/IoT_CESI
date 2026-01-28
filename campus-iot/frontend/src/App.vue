@@ -66,23 +66,27 @@
           <!-- User info -->
           <v-list nav v-if="user">
             <v-list-item 
-              class="px-4 py-3"
+              :class="rail ? 'px-0 py-3 justify-center' : 'px-4 py-3'"
               @click="router.push('/profile')"
               style="cursor: pointer"
             >
               <template v-slot:prepend>
-                <v-avatar :color="user.avatar_color || (isAdmin ? 'error' : 'primary')" size="36">
+                <v-avatar 
+                  :color="user.avatar_color || (isAdmin ? 'error' : 'primary')" 
+                  size="36"
+                  :class="rail ? 'mx-auto' : ''"
+                >
                   <span class="text-body-2 font-weight-bold text-white">{{ userInitials }}</span>
                 </v-avatar>
               </template>
-              <v-list-item-title class="text-body-2 font-weight-medium">
+              <v-list-item-title v-if="!rail" class="text-body-2 font-weight-medium">
                 {{ user.first_name }} {{ user.last_name }}
               </v-list-item-title>
-              <v-list-item-subtitle class="text-caption">
+              <v-list-item-subtitle v-if="!rail" class="text-caption">
                 <v-icon size="12" class="mr-1">{{ user.role_info?.icon || 'mdi-account' }}</v-icon>
                 {{ user.role_info?.name || 'Utilisateur' }}
               </v-list-item-subtitle>
-              <template v-slot:append>
+              <template v-slot:append v-if="!rail">
                 <v-icon size="16" class="text-medium-emphasis">mdi-chevron-right</v-icon>
               </template>
             </v-list-item>

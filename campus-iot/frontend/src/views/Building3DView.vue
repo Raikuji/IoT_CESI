@@ -1207,8 +1207,33 @@ watch(selectedFloor, () => {
   })
 })
 
+// Watch sensor data changes to update room colors dynamically
+watch(
+  () => buildingSensors.value.map(s => ({ id: s.id, value: s.value, type: s.type, room_id: s.room_id })),
+  () => {
+    // Update room colors based on new sensor values (heatmap)
+    if (scene) {
+      updateRoomColors()
+    }
+  },
+  { deep: true }
+)
+
+// Update room colors without rebuilding the entire scene
+function updateRoomColors() {
+  currentFloorRooms.value.forEach(room => {
+    const mesh = roomMeshes[room.id]
+    if (mesh) {
+      const newColor = getRoomColor(room)
+      mesh.material.color.setHex(newColor)
+    }
+  })
+}
+
 // Lifecycle
 onMounted(() => {
+  // Fetch sensors from API on mount
+  buildingStore.fetchSensors()
   setTimeout(initScene, 100)
 })
 
