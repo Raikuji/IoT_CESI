@@ -51,16 +51,20 @@ class MQTTService:
                 except json.JSONDecodeError:
                     value = payload
             
-            # Extract room and sensor type from topic
-            # Format: campus/orion/{ROOM}/sensors/{TYPE}
-            # Example: campus/orion/X101/sensors/temperature
+            # Extract sensor type from topic
+            # Format: campus/orion/sensors/{TYPE}
+            # Example: campus/orion/sensors/temperature
             parts = topic.split('/')
-            if len(parts) >= 5:
-                room_id = parts[2]      # X101, X108, NUMERILAB, etc.
-                sensor_type = parts[4]  # temperature, humidity, presence
-            else:
-                room_id = "unknown"
-                sensor_type = parts[-1] if len(parts) > 0 else "unknown"
+            
+            # Get sensor type (last part of topic)
+            sensor_type = parts[-1] if len(parts) > 0 else "unknown"
+            
+            # Get room from JSON payload if available
+            room_id = "unknown"
+            if isinstance(value, dict):
+                room_id = value.get('room', value.get('room_id', 'unknown'))
+                # Extract actual value from dict
+                value = value.get('value', value.get('temperature', value.get('humidity', value.get('distance', 0))))
             
             logger.info(f"[MQTT] Room: {room_id}, Type: {sensor_type}, Value: {value}")
             

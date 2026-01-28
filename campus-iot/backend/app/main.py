@@ -58,14 +58,14 @@ def handle_mqtt_message(sensor_type: str, value, topic: str, room_id: str = "unk
                 name=f"{sensor_type.capitalize()} {room_id}",
                 type=sensor_type,
                 location=room_id,
-                status="online"
+                is_active=True
             )
             db.add(sensor)
             db.commit()
             db.refresh(sensor)
         else:
-            # Update sensor status and location
-            sensor.status = "online"
+            # Update sensor location
+            sensor.is_active = True
             sensor.location = room_id
             db.commit()
         
