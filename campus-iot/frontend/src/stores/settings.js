@@ -21,6 +21,16 @@ export const useSettingsStore = defineStore('settings', () => {
   const defaultFloor = computed(() => settings.value.default_floor ?? 'RDC')
   const autoRefreshInterval = computed(() => settings.value.auto_refresh_interval ?? 30)
   const dataRetentionDays = computed(() => settings.value.data_retention_days ?? 90)
+  const energySavingEnabled = computed(() => settings.value.energy_saving_enabled ?? false)
+  const energySavingRefreshInterval = computed(() => settings.value.energy_saving_refresh_interval ?? 120)
+  const energySavingRefreshIntervalNight = computed(() => settings.value.energy_saving_refresh_interval_night ?? 300)
+  const energySavingDisableLive = computed(() => settings.value.energy_saving_disable_live ?? true)
+  const energyProfile = computed(() => settings.value.energy_profile ?? 'normal')
+  const energyScheduleEnabled = computed(() => settings.value.energy_schedule_enabled ?? false)
+  const energyScheduleProfile = computed(() => settings.value.energy_schedule_profile ?? 'eco')
+  const energyScheduleDays = computed(() => settings.value.energy_schedule_days ?? [])
+  const energyScheduleStart = computed(() => settings.value.energy_schedule_start ?? '22:00')
+  const energyScheduleEnd = computed(() => settings.value.energy_schedule_end ?? '06:00')
 
   // Fetch all settings from API
   async function fetchSettings() {
@@ -122,6 +132,16 @@ export const useSettingsStore = defineStore('settings', () => {
     defaultFloor,
     autoRefreshInterval,
     dataRetentionDays,
+    energySavingEnabled,
+    energySavingRefreshInterval,
+    energySavingRefreshIntervalNight,
+    energySavingDisableLive,
+    energyProfile,
+    energyScheduleEnabled,
+    energyScheduleProfile,
+    energyScheduleDays,
+    energyScheduleStart,
+    energyScheduleEnd,
     fetchSettings,
     getSetting,
     updateSetting,

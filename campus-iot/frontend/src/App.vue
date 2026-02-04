@@ -148,7 +148,7 @@
           </v-chip>
 
           <!-- Notifications -->
-          <v-btn icon variant="text" class="mr-2">
+          <v-btn icon variant="text" class="mr-2" @click="goToAlerts" :disabled="!canAlerts">
             <v-badge
               :content="alertCount"
               :model-value="alertCount > 0"
@@ -164,6 +164,15 @@
       <!-- Main Content -->
       <v-main class="bg-background">
         <v-container fluid class="pa-6">
+          <v-alert
+            v-if="!isOnline"
+            type="warning"
+            variant="tonal"
+            class="mb-6"
+            border="start"
+          >
+            Mode hors‑ligne activé — affichage des données mises en cache.
+          </v-alert>
           <router-view v-slot="{ Component }">
             <transition name="page" mode="out-in">
               <component :is="Component" />
@@ -237,14 +246,28 @@ const navRoutes = computed(() => {
   return getNavRoutes(user.value?.role || 'user', permissions)
 })
 
+const permissions = computed(() => user.value?.role_info?.permissions || [])
+const canDashboard = computed(() => permissions.value.includes('all') || permissions.value.includes('dashboard'))
+const canSensors = computed(() => permissions.value.includes('all') || permissions.value.includes('sensors'))
+const canAlerts = computed(() => permissions.value.includes('all') || permissions.value.includes('alerts'))
+const canBuilding = computed(() => permissions.value.includes('all') || permissions.value.includes('building'))
+
 // Stores
 const sensorsStore = useSensorsStore()
 const alertsStore = useAlertsStore()
 const buildingStore = useBuildingStore()
 const settingsStore = useSettingsStore()
+const isOnline = ref(navigator.onLine)
+
+const goToAlerts = () => {
+  if (!canAlerts.value) return
+  if (router.currentRoute.value.path !== '/alerts') {
+    router.push('/alerts')
+  }
+}
 
 // WebSocket
-const { connected: wsConnected } = useWebSocket()
+const { connected: wsConnected, disconnect: wsDisconnect, reconnect: wsReconnect } = useWebSocket()
 
 // Notifications
 const notifications = useNotifications()
@@ -252,6 +275,81 @@ const notifications = useNotifications()
 // Computed
 const alertCount = computed(() => alertsStore.activeCount)
 const lastUpdate = computed(() => sensorsStore.lastUpdate)
+
+const pollTimer = ref(null)
+const scheduleTick = ref(Date.now())
+const energySavingEnabled = computed(() => settingsStore.energySavingEnabled.value)
+const energySavingRefreshInterval = computed(() => settingsStore.energySavingRefreshInterval.value)
+const energySavingRefreshIntervalNight = computed(() => settingsStore.energySavingRefreshIntervalNight.value)
+const energySavingDisableLive = computed(() => settingsStore.energySavingDisableLive.value)
+const energyProfile = computed(() => settingsStore.energyProfile.value)
+const energyScheduleEnabled = computed(() => settingsStore.energyScheduleEnabled.value)
+const energyScheduleProfile = computed(() => settingsStore.energyScheduleProfile.value)
+const energyScheduleDays = computed(() => settingsStore.energyScheduleDays.value)
+const energyScheduleStart = computed(() => settingsStore.energyScheduleStart.value)
+const energyScheduleEnd = computed(() => settingsStore.energyScheduleEnd.value)
+
+const effectiveProfile = computed(() => {
+  scheduleTick.value
+  if (energyScheduleEnabled.value && isInSchedule()) {
+    return energyScheduleProfile.value || 'eco'
+  }
+  if (energySavingEnabled.value) {
+    return energyProfile.value || 'eco'
+  }
+  return 'normal'
+})
+
+const effectiveEnergyEnabled = computed(() => effectiveProfile.value !== 'normal')
+const effectiveDisableLive = computed(() => {
+  if (effectiveProfile.value === 'normal') return false
+  if (effectiveProfile.value === 'night') return true
+  return energySavingDisableLive.value
+})
+const effectiveRefreshInterval = computed(() => {
+  if (effectiveProfile.value === 'night') return Number(energySavingRefreshIntervalNight.value) || 300
+  return Number(energySavingRefreshInterval.value) || 120
+})
+
+async function fetchAllData() {
+  if (!authStore.isAuthenticated) return
+  const tasks = [settingsStore.fetchSettings()]
+  if (canDashboard.value || canSensors.value) tasks.push(sensorsStore.fetchSensors())
+  if (canDashboard.value || canAlerts.value) tasks.push(alertsStore.fetchAlerts())
+  if (canDashboard.value || canBuilding.value) tasks.push(buildingStore.fetchSensors())
+  await Promise.all(tasks)
+}
+
+function startEcoPolling() {
+  if (pollTimer.value) clearInterval(pollTimer.value)
+  const interval = Math.max(30, Number(effectiveRefreshInterval.value) || 120)
+  pollTimer.value = setInterval(fetchAllData, interval * 1000)
+}
+
+function stopEcoPolling() {
+  if (pollTimer.value) clearInterval(pollTimer.value)
+  pollTimer.value = null
+}
+
+function isInSchedule() {
+  if (!energyScheduleEnabled.value) return false
+  const days = Array.isArray(energyScheduleDays.value) ? energyScheduleDays.value : []
+  if (days.length && !days.includes(new Date().getDay() - 1 < 0 ? 6 : new Date().getDay() - 1)) {
+    // JS getDay: 0=Dim... adjust to 0=Mon
+    return false
+  }
+  const now = new Date()
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const [startH, startM] = String(energyScheduleStart.value || '00:00').split(':').map(Number)
+  const [endH, endM] = String(energyScheduleEnd.value || '00:00').split(':').map(Number)
+  const start = (startH || 0) * 60 + (startM || 0)
+  const end = (endH || 0) * 60 + (endM || 0)
+
+  if (start === end) return false
+  if (start < end) return nowMinutes >= start && nowMinutes <= end
+  return nowMinutes >= start || nowMinutes <= end
+}
 
 // Helpers
 function formatTime(date) {
@@ -272,16 +370,46 @@ function logout() {
 onMounted(async () => {
   // Initialize auth
   await authStore.initAuth()
+
+  // Load cached data immediately (offline support)
+  sensorsStore.loadCache?.()
+  alertsStore.loadCache?.()
+  buildingStore.loadCache?.()
   
-  // Fetch data if authenticated
-  if (authStore.isAuthenticated) {
-    // Fetch all synced data in parallel
-    await Promise.all([
-      sensorsStore.fetchSensors(),
-      alertsStore.fetchAlerts(),
-      buildingStore.fetchSensors(),  // Placed sensors from Supabase
-      settingsStore.fetchSettings()   // System settings from Supabase
-    ])
+  await fetchAllData()
+
+  const handleOnline = async () => {
+    isOnline.value = true
+    await fetchAllData()
+  }
+
+  const handleOffline = () => {
+    isOnline.value = false
+  }
+
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
+
+  setInterval(() => {
+    scheduleTick.value = Date.now()
+  }, 60000)
+
+  if (effectiveEnergyEnabled.value) {
+    if (effectiveDisableLive.value) wsDisconnect()
+    startEcoPolling()
+  }
+})
+
+watch([effectiveEnergyEnabled, effectiveRefreshInterval], ([enabled]) => {
+  if (enabled) startEcoPolling()
+  else stopEcoPolling()
+})
+
+watch([effectiveEnergyEnabled, effectiveDisableLive], ([enabled, disableLive]) => {
+  if (enabled && disableLive) {
+    wsDisconnect()
+  } else {
+    wsReconnect()
   }
 })
 </script>

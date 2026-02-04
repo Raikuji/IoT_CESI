@@ -33,15 +33,26 @@ services:
       MQTT_BROKER: mosquitto
       MQTT_PORT: 1883
       SECRET_KEY: ${SECRET_KEY:-campus-iot-secret-key-2024}
+      BACKUPS_ENABLED: "true"
+      BACKUP_INTERVAL_MINUTES: "1440"
+      BACKUP_RETENTION_DAYS: "7"
+      BACKUP_DIR: "/app/backups"
+      EXPORTS_ENABLED: "true"
+      EXPORT_CHECK_INTERVAL_SECONDS: "60"
+      EXPORT_DIR: "/app/exports"
     ports:
       - "8000:8000"
     depends_on:
       - mosquitto
     volumes:
       - ./backend/app:/app
+      - ./backups:/app/backups
+      - ./exports:/app/exports
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "aws-1-eu-central-1.pooler.supabase.com:3.71.225.44"
+      - "discord.com:162.159.136.232"
+      - "discordapp.com:162.159.136.232"
     dns:
       - 8.8.8.8
       - 1.1.1.1

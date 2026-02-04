@@ -15,3 +15,12 @@ app.use(router)
 app.use(vuetify)
 
 app.mount('#app')
+
+// Register service worker for offline mode
+if ('serviceWorker' in navigator) {
+	window.addEventListener('load', () => {
+		navigator.serviceWorker.register('/sw.js').catch((e) => {
+			console.warn('Service worker registration failed:', e)
+		})
+	})
+}

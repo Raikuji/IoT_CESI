@@ -17,9 +17,6 @@
             <v-icon start>mdi-bell-cog</v-icon>
             Règles d'alerte
             <v-spacer></v-spacer>
-            <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="showAddRule = true">
-              Ajouter
-            </v-btn>
           </v-card-title>
           <v-card-text>
             <v-list bg-color="transparent">
@@ -43,7 +40,8 @@
                 <template v-slot:append>
                   <v-switch
                     v-model="rule.is_active"
-                    color="primary"
+                    color="success"
+                    base-color="error"
                     hide-details
                     density="compact"
                     @change="toggleRule(rule)"
@@ -195,7 +193,6 @@ import { storeToRefs } from 'pinia'
 import { useTheme } from 'vuetify'
 import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
-import axios from 'axios'
 
 const theme = useTheme()
 const sensorsStore = useSensorsStore()
@@ -206,6 +203,7 @@ const { rules: alertRules } = storeToRefs(alertsStore)
 
 const isDark = ref(theme.global.current.value.dark)
 const showAddRule = ref(false)
+
 
 const newRule = ref({
   sensor_id: null,
@@ -257,18 +255,13 @@ function getSensorName(sensorId) {
 }
 
 async function toggleRule(rule) {
-  try {
-    await axios.patch(`/api/alerts/rules/${rule.id}`, {
-      is_active: rule.is_active
-    })
-  } catch (e) {
-    console.error('Failed to toggle rule:', e)
-  }
+  await alertsStore.updateRule(rule.id, { is_active: rule.is_active })
+  await alertsStore.fetchRules()
 }
 
 async function addRule() {
-  try {
-    await axios.post('/api/alerts/rules', newRule.value)
+  const result = await alertsStore.createRule(newRule.value)
+  if (result.success) {
     await alertsStore.fetchRules()
     showAddRule.value = false
     newRule.value = {
@@ -278,8 +271,6 @@ async function addRule() {
       message: '',
       severity: 'warning'
     }
-  } catch (e) {
-    console.error('Failed to add rule:', e)
   }
 }
 

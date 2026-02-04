@@ -36,6 +36,7 @@ DEFAULT_ROOM = "X101"
 # Topic structure: campus/orion/sensors/{TYPE}
 TOPIC_PREFIX = "campus/orion"
 TOPIC_COMMANDS = f"{TOPIC_PREFIX}/actuators/#"
+TOPIC_ENERGY = f"{TOPIC_PREFIX}/controls/energy/#"
 
 # =============================================================================
 # GLOBALS
@@ -57,6 +58,10 @@ def on_connect(client, userdata, flags, rc):
         # Subscribe to actuator commands to forward to Arduino
         client.subscribe(TOPIC_COMMANDS, qos=QOS)
         print(f"[MQTT] Subscribed: {TOPIC_COMMANDS}")
+
+        # Subscribe to energy control settings to forward to Arduino
+        client.subscribe(TOPIC_ENERGY, qos=QOS)
+        print(f"[MQTT] Subscribed: {TOPIC_ENERGY}")
     else:
         print(f"[MQTT] Connection failed (code: {rc})")
 

@@ -14,6 +14,12 @@ const unsigned long INTERVAL_NORMAL = 60000;   // 1 minute normally
 const unsigned long INTERVAL_FAST = 30000;     // 30 sec if uncomfortable
 unsigned long lastSend = 0;
 
+// Energy saving settings (updated via MQTT commands)
+bool energyEnabled = false;
+unsigned long energyIntervalSec = 120;
+unsigned long energyIntervalNightSec = 300;
+String energyProfile = "normal";
+
 // Comfort thresholds
 const float TEMP_MIN = 19.0;
 const float TEMP_MAX = 23.0;
@@ -68,6 +74,9 @@ void setup() {
 }
 
 void loop() {
+  // Handle incoming energy settings from gateway
+  handleCommands();
+
   float temperature = bme.readTemperature();
   float humidity = bme.readHumidity();
   
@@ -75,8 +84,11 @@ void loop() {
   bool outOfRange = (temperature < TEMP_MIN || temperature > TEMP_MAX ||
                      humidity < HUM_MIN || humidity > HUM_MAX);
   
-  // Send faster if uncomfortable
+  // Send faster if uncomfortable, unless energy saving is enabled
   unsigned long interval = outOfRange ? INTERVAL_FAST : INTERVAL_NORMAL;
+  if (energyEnabled) {
+    interval = (energyProfile == "night" ? energyIntervalNightSec : energyIntervalSec) * 1000UL;
+  }
   
   if (millis() - lastSend >= interval) {
     sendData(temperature, humidity, outOfRange);
@@ -86,6 +98,91 @@ void loop() {
   // LED indicates comfort status
   digitalWrite(LED_STATUS, outOfRange ? HIGH : LOW);
   delay(100);
+}
+
+void handleCommands() {
+  if (xbeeSerial.available()) {
+    String line = xbeeSerial.readStringUntil('\n');
+    line.trim();
+    if (line.startsWith("CMD:")) {
+      applyEnergyCommand(line);
+    }
+  }
+  if (Serial.available()) {
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    if (line.startsWith("CMD:")) {
+      applyEnergyCommand(line);
+    }
+  }
+}
+
+void applyEnergyCommand(String cmd) {
+  // Format: CMD:topic:payload
+  int first = cmd.indexOf(':');
+  int second = cmd.indexOf(':', first + 1);
+  if (second < 0) return;
+
+  String topic = cmd.substring(first + 1, second);
+  String payload = cmd.substring(second + 1);
+
+  int idx = topic.indexOf("/controls/energy/");
+  if (idx < 0) return;
+  String rest = topic.substring(idx + 17); // len("/controls/energy/")
+  int slash = rest.indexOf('/');
+  if (slash < 0) return;
+  String room = rest.substring(0, slash);
+  String sensorType = rest.substring(slash + 1);
+
+  if (room != ROOM) return;
+  if (sensorType != "temperature" && sensorType != "humidity") return;
+
+  energyEnabled = jsonBool(payload, "enabled", energyEnabled);
+  energyIntervalSec = jsonInt(payload, "refresh_interval", energyIntervalSec);
+  energyIntervalNightSec = jsonInt(payload, "refresh_interval_night", energyIntervalNightSec);
+  energyProfile = jsonString(payload, "profile", energyProfile);
+
+  Serial.print(F("[ENERGY] enabled="));
+  Serial.print(energyEnabled ? "true" : "false");
+  Serial.print(F(" interval="));
+  Serial.print(energyIntervalSec);
+  Serial.print(F(" night="));
+  Serial.print(energyIntervalNightSec);
+  Serial.print(F(" profile="));
+  Serial.println(energyProfile);
+}
+
+bool jsonBool(String json, String key, bool defVal) {
+  String needle = "\"" + key + "\":";
+  int idx = json.indexOf(needle);
+  if (idx < 0) return defVal;
+  int start = idx + needle.length();
+  String value = json.substring(start);
+  value.trim();
+  if (value.startsWith("true")) return true;
+  if (value.startsWith("false")) return false;
+  return defVal;
+}
+
+unsigned long jsonInt(String json, String key, unsigned long defVal) {
+  String needle = "\"" + key + "\":";
+  int idx = json.indexOf(needle);
+  if (idx < 0) return defVal;
+  int start = idx + needle.length();
+  int end = start;
+  while (end < json.length() && isDigit(json[end])) end++;
+  if (end == start) return defVal;
+  return (unsigned long) json.substring(start, end).toInt();
+}
+
+String jsonString(String json, String key, String defVal) {
+  String needle = "\"" + key + "\":\"";
+  int idx = json.indexOf(needle);
+  if (idx < 0) return defVal;
+  int start = idx + needle.length();
+  int end = json.indexOf("\"", start);
+  if (end < 0) return defVal;
+  return json.substring(start, end);
 }
 
 void sendData(float temp, float hum, bool outOfRange) {

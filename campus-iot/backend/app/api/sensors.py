@@ -1,7 +1,7 @@
 """
 Sensors API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -13,8 +13,22 @@ from schemas import (
     SensorCreate, SensorUpdate, SensorResponse,
     SensorDataCreate, SensorDataResponse, SensorWithLatestData
 )
+from api.auth import require_permission, require_any_permission
+from services.audit_service import log_audit
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
+
+
+def sensor_snapshot(sensor: Sensor) -> dict:
+    return {
+        "id": sensor.id,
+        "name": sensor.name,
+        "type": sensor.type,
+        "location": sensor.location,
+        "unit": sensor.unit,
+        "is_active": sensor.is_active,
+        "created_at": sensor.created_at.isoformat() if sensor.created_at else None
+    }
 
 
 @router.get("/", response_model=List[SensorWithLatestData])
@@ -22,6 +36,7 @@ def get_sensors(
     skip: int = 0,
     limit: int = 100,
     active_only: bool = True,
+    current_user=Depends(require_any_permission(["sensors", "dashboard"])),
     db: Session = Depends(get_db)
 ):
     """Get all sensors with their latest data"""
@@ -54,7 +69,11 @@ def get_sensors(
 
 
 @router.get("/{sensor_id}", response_model=SensorWithLatestData)
-def get_sensor(sensor_id: int, db: Session = Depends(get_db)):
+def get_sensor(
+    sensor_id: int,
+    current_user=Depends(require_any_permission(["sensors", "dashboard"])),
+    db: Session = Depends(get_db)
+):
     """Get a specific sensor by ID"""
     sensor = db.query(Sensor).filter(Sensor.id == sensor_id).first()
     if not sensor:
@@ -78,12 +97,29 @@ def get_sensor(sensor_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=SensorResponse)
-def create_sensor(sensor: SensorCreate, db: Session = Depends(get_db)):
+def create_sensor(
+    sensor: SensorCreate,
+    current_user=Depends(require_permission("sensors")),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
     """Create a new sensor"""
     db_sensor = Sensor(**sensor.model_dump())
     db.add(db_sensor)
     db.commit()
     db.refresh(db_sensor)
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="create",
+        entity_type="sensor",
+        entity_id=db_sensor.id,
+        before=None,
+        after=sensor_snapshot(db_sensor),
+        ip_address=request.client.host if request and request.client else None
+    )
     return db_sensor
 
 
@@ -92,35 +128,68 @@ def create_sensor(sensor: SensorCreate, db: Session = Depends(get_db)):
 def update_sensor(
     sensor_id: int,
     sensor: SensorUpdate,
-    db: Session = Depends(get_db)
+    current_user=Depends(require_permission("sensors")),
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Update a sensor"""
     db_sensor = db.query(Sensor).filter(Sensor.id == sensor_id).first()
     if not db_sensor:
         raise HTTPException(status_code=404, detail="Sensor not found")
     
+    before = sensor_snapshot(db_sensor)
     update_data = sensor.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_sensor, key, value)
     
     db.commit()
     db.refresh(db_sensor)
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="sensor",
+        entity_id=db_sensor.id,
+        before=before,
+        after=sensor_snapshot(db_sensor),
+        ip_address=request.client.host if request and request.client else None
+    )
     return db_sensor
 
 
 @router.delete("/{sensor_id}")
-def delete_sensor(sensor_id: int, db: Session = Depends(get_db)):
+def delete_sensor(
+    sensor_id: int,
+    current_user=Depends(require_permission("sensors")),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
     """Delete a sensor and all its data"""
     db_sensor = db.query(Sensor).filter(Sensor.id == sensor_id).first()
     if not db_sensor:
         raise HTTPException(status_code=404, detail="Sensor not found")
     
+    before = sensor_snapshot(db_sensor)
     # Delete all sensor data first
     db.query(SensorData).filter(SensorData.sensor_id == sensor_id).delete()
     
     # Delete the sensor
     db.delete(db_sensor)
     db.commit()
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="delete",
+        entity_type="sensor",
+        entity_id=sensor_id,
+        before=before,
+        after=None,
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return {"success": True, "message": f"Sensor {sensor_id} deleted"}
 
@@ -131,6 +200,7 @@ def get_sensor_data(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     limit: int = Query(default=1000, le=10000),
+    current_user=Depends(require_any_permission(["sensors", "dashboard"])),
     db: Session = Depends(get_db)
 ):
     """Get historical data for a sensor"""
@@ -157,6 +227,7 @@ def get_sensor_data(
 def add_sensor_data(
     sensor_id: int,
     data: SensorDataCreate,
+    current_user=Depends(require_permission("sensors")),
     db: Session = Depends(get_db)
 ):
     """Add a data point for a sensor (mainly for testing)"""
