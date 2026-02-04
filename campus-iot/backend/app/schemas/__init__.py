@@ -19,3 +19,8 @@ from .dashboard import (
     SensorSummary, DashboardSummary,
     StatsRequest, StatsResponse, PresenceStats
 )
+from .anomaly import AnomalyResponse
+from .integration import (
+    WebhookCreate, WebhookUpdate, WebhookResponse,
+    ExportConfigCreate, ExportConfigUpdate, ExportConfigResponse
+)

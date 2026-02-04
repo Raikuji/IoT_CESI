@@ -10,12 +10,16 @@ from datetime import datetime, timedelta
 from db import get_db
 from models import Sensor, SensorData, Alert, Actuator
 from schemas import DashboardSummary, SensorSummary, StatsResponse, PresenceStats
+from api.auth import require_permission
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary", response_model=DashboardSummary)
-def get_dashboard_summary(db: Session = Depends(get_db)):
+def get_dashboard_summary(
+    current_user=Depends(require_permission("dashboard")),
+    db: Session = Depends(get_db)
+):
     """Get dashboard summary with all sensor latest values"""
     sensors = db.query(Sensor).filter(Sensor.is_active == True).all()
     
@@ -77,6 +81,7 @@ def get_stats(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     interval: str = Query(default="1h", regex="^(1m|5m|15m|1h|1d)$"),
+    current_user=Depends(require_permission("dashboard")),
     db: Session = Depends(get_db)
 ):
     """Get aggregated statistics for sensors"""
@@ -134,6 +139,7 @@ def get_stats(
 @router.get("/presence", response_model=PresenceStats)
 def get_presence_stats(
     hours: int = Query(default=24, le=168),
+    current_user=Depends(require_permission("dashboard")),
     db: Session = Depends(get_db)
 ):
     """Get presence detection statistics"""

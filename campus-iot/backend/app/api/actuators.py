@@ -13,6 +13,7 @@ from schemas import (
     ActuatorCommand, ActuatorCommandResponse, HeatingMode
 )
 from services import mqtt_service
+from api.auth import require_permission
 
 router = APIRouter(prefix="/actuators", tags=["actuators"])
 
@@ -26,6 +27,7 @@ heating_state = {
 @router.get("/", response_model=List[ActuatorResponse])
 def get_actuators(
     active_only: bool = True,
+    current_user=Depends(require_permission("control")),
     db: Session = Depends(get_db)
 ):
     """Get all actuators"""
@@ -37,7 +39,11 @@ def get_actuators(
 
 
 @router.get("/{actuator_id}", response_model=ActuatorResponse)
-def get_actuator(actuator_id: int, db: Session = Depends(get_db)):
+def get_actuator(
+    actuator_id: int,
+    current_user=Depends(require_permission("control")),
+    db: Session = Depends(get_db)
+):
     """Get a specific actuator"""
     actuator = db.query(Actuator).filter(Actuator.id == actuator_id).first()
     if not actuator:
@@ -49,6 +55,7 @@ def get_actuator(actuator_id: int, db: Session = Depends(get_db)):
 def send_command(
     actuator_id: int,
     command: ActuatorCommand,
+    current_user=Depends(require_permission("control")),
     db: Session = Depends(get_db)
 ):
     """Send a command to an actuator"""
@@ -80,6 +87,7 @@ def send_command(
 def get_actuator_commands(
     actuator_id: int,
     limit: int = 50,
+    current_user=Depends(require_permission("control")),
     db: Session = Depends(get_db)
 ):
     """Get command history for an actuator"""
@@ -96,13 +104,18 @@ def get_actuator_commands(
 
 # Heating specific endpoints
 @router.get("/heating/mode", response_model=HeatingMode)
-def get_heating_mode():
+def get_heating_mode(
+    current_user=Depends(require_permission("control"))
+):
     """Get current heating mode"""
     return HeatingMode(**heating_state)
 
 
 @router.post("/heating/mode", response_model=HeatingMode)
-def set_heating_mode(mode: HeatingMode):
+def set_heating_mode(
+    mode: HeatingMode,
+    current_user=Depends(require_permission("control"))
+):
     """Set heating mode (auto/manual) and setpoint"""
     if mode.mode not in ["auto", "manual"]:
         raise HTTPException(
@@ -123,13 +136,18 @@ def set_heating_mode(mode: HeatingMode):
 
 
 @router.get("/heating/setpoint")
-def get_heating_setpoint():
+def get_heating_setpoint(
+    current_user=Depends(require_permission("control"))
+):
     """Get heating temperature setpoint"""
     return {"setpoint": heating_state["setpoint"]}
 
 
 @router.post("/heating/setpoint")
-def set_heating_setpoint(setpoint: float):
+def set_heating_setpoint(
+    setpoint: float,
+    current_user=Depends(require_permission("control"))
+):
     """Set heating temperature setpoint"""
     if setpoint < 10 or setpoint > 30:
         raise HTTPException(

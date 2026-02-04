@@ -13,11 +13,33 @@
           <v-icon start class="pulse">mdi-circle</v-icon>
           Live
         </v-chip>
+        <v-menu location="bottom end">
+          <template v-slot:activator="{ props }">
+            <v-btn v-bind="props" variant="tonal" color="primary" prepend-icon="mdi-view-grid">
+              Personnaliser
+            </v-btn>
+          </template>
+          <v-card min-width="260">
+            <v-card-title class="text-body-1 font-weight-bold">Widgets</v-card-title>
+            <v-divider />
+            <v-card-text class="py-2">
+              <v-checkbox
+                v-for="widget in widgetOptions"
+                :key="widget.key"
+                v-model="widget.enabled"
+                :label="widget.label"
+                density="compact"
+                hide-details
+                @update:modelValue="saveLayout"
+              />
+            </v-card-text>
+          </v-card>
+        </v-menu>
       </div>
     </div>
 
     <!-- Room Filter -->
-    <v-card color="surface" class="mb-6">
+    <v-card v-if="isWidgetEnabled('filter')" color="surface" class="mb-6">
       <v-card-text class="pa-4">
         <v-row align="center">
           <v-col cols="12" sm="4" md="3">
@@ -86,8 +108,97 @@
       </v-card-text>
     </v-card>
 
+    <!-- Multi-room comparison -->
+    <v-card v-if="isWidgetEnabled('comparison')" color="surface" class="mb-6">
+      <v-card-title class="d-flex align-center">
+        <v-icon start>mdi-compare</v-icon>
+        Comparaison multi‑salles
+        <v-spacer />
+        <v-chip v-if="selectedCompareRooms.length" size="small" color="primary" variant="tonal">
+          {{ selectedCompareRooms.length }} salles
+        </v-chip>
+      </v-card-title>
+      <v-card-text>
+        <v-row align="center">
+          <v-col cols="12" md="6">
+            <v-select
+              v-model="selectedCompareRooms"
+              :items="compareRoomOptions"
+              label="Choisir des salles"
+              multiple
+              clearable
+              chips
+              variant="outlined"
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" md="6" class="text-right">
+            <v-btn variant="text" @click="selectedCompareRooms = []">
+              Réinitialiser
+            </v-btn>
+          </v-col>
+        </v-row>
+
+        <v-row v-if="compareCards.length" class="mt-2">
+          <v-col v-for="card in compareCards" :key="card.roomId" cols="12" sm="6" lg="3">
+            <v-card class="h-100" variant="tonal">
+              <v-card-text>
+                <div class="d-flex align-center justify-space-between mb-3">
+                  <div>
+                    <div class="text-body-1 font-weight-semibold">{{ card.roomName }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ card.roomId }}</div>
+                  </div>
+                  <v-chip size="x-small" color="primary" variant="tonal">
+                    {{ card.status }}
+                  </v-chip>
+                </div>
+
+                <div class="mb-3">
+                  <div class="text-caption">Température</div>
+                  <div class="text-body-1 font-weight-bold" :style="{ color: getTemperatureColor(card.temperature) }">
+                    {{ formatValue(card.temperature, 1) }}°C
+                  </div>
+                  <v-progress-linear
+                    :model-value="getTemperaturePercent(card.temperature)"
+                    :color="getTemperatureColor(card.temperature)"
+                    height="4"
+                    rounded
+                  />
+                </div>
+
+                <div class="mb-3">
+                  <div class="text-caption">Humidité</div>
+                  <div class="text-body-1 font-weight-bold" :style="{ color: getHumidityColor(card.humidity) }">
+                    {{ formatValue(card.humidity, 0) }}%
+                  </div>
+                  <v-progress-linear
+                    :model-value="card.humidity || 0"
+                    :color="getHumidityColor(card.humidity)"
+                    height="4"
+                    rounded
+                  />
+                </div>
+
+                <div>
+                  <div class="text-caption">Présence</div>
+                  <div class="text-body-1 font-weight-bold" :class="card.presence ? 'text-success' : 'text-grey'">
+                    {{ card.presence ? 'Oui' : 'Non' }}
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <div v-else class="text-center py-6 text-medium-emphasis">
+          <v-icon size="48" class="mb-2">mdi-compare-off</v-icon>
+          <p class="text-body-2">Sélectionne des salles pour comparer</p>
+        </div>
+      </v-card-text>
+    </v-card>
+
     <!-- Sensor Cards Grid -->
-    <v-row>
+    <v-row v-if="isWidgetEnabled('cards')">
       <!-- Temperature -->
       <v-col cols="12" sm="6" lg="4">
         <v-card 
@@ -202,9 +313,9 @@
     </v-row>
 
     <!-- Charts Row -->
-    <v-row class="mt-4">
+    <v-row v-if="isWidgetEnabled('chart') || isWidgetEnabled('alerts')" class="mt-4">
       <!-- Temperature Chart -->
-      <v-col cols="12" lg="8">
+      <v-col v-if="isWidgetEnabled('chart')" cols="12" lg="8">
         <v-card color="surface">
           <v-card-title class="d-flex align-center">
             <v-icon start>mdi-chart-line</v-icon>
@@ -236,7 +347,7 @@
       </v-col>
 
       <!-- Alerts Summary -->
-      <v-col cols="12" lg="4">
+      <v-col v-if="isWidgetEnabled('alerts')" cols="12" lg="4">
         <v-card color="surface" class="h-100">
           <v-card-title class="d-flex align-center">
             <v-icon start>mdi-bell-alert</v-icon>
@@ -329,6 +440,7 @@ import { storeToRefs } from 'pinia'
 import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
 import { useBuildingStore } from '@/stores/building'
+import { useAuthStore } from '@/stores/auth'
 import VueApexCharts from 'vue3-apexcharts'
 
 const apexchart = VueApexCharts
@@ -337,14 +449,59 @@ const apexchart = VueApexCharts
 const sensorsStore = useSensorsStore()
 const alertsStore = useAlertsStore()
 const buildingStore = useBuildingStore()
+const authStore = useAuthStore()
 
 const { sensors, temperature, humidity, presence, onlineSensors } = storeToRefs(sensorsStore)
 const { activeAlerts } = storeToRefs(alertsStore)
 const { floors, rooms, sensors: buildingSensors } = storeToRefs(buildingStore)
+const { preferences } = storeToRefs(authStore)
 
 // Room filter
 const selectedFloor = ref('all')
 const selectedRoom = ref(null)
+const selectedCompareRooms = ref([])
+
+// Dashboard layout (user preferences)
+const defaultLayout = {
+  widgets: {
+    filter: true,
+    comparison: true,
+    cards: true,
+    chart: true,
+    alerts: true
+  }
+}
+
+const layout = ref({ ...defaultLayout })
+
+const widgetOptions = ref([])
+
+function syncWidgetOptions() {
+  const widgets = layout.value.widgets || {}
+  widgetOptions.value = [
+    { key: 'filter', label: 'Filtre de salle', enabled: widgets.filter !== false },
+    { key: 'comparison', label: 'Comparaison multi‑salles', enabled: widgets.comparison !== false },
+    { key: 'cards', label: 'Cartes capteurs', enabled: widgets.cards !== false },
+    { key: 'chart', label: 'Courbe température', enabled: widgets.chart !== false },
+    { key: 'alerts', label: 'Alertes actives', enabled: widgets.alerts !== false }
+  ]
+}
+
+function isWidgetEnabled(key) {
+  return layout.value.widgets?.[key] !== false
+}
+
+async function saveLayout() {
+  const updated = {
+    ...layout.value,
+    widgets: widgetOptions.value.reduce((acc, w) => {
+      acc[w.key] = !!w.enabled
+      return acc
+    }, {})
+  }
+  layout.value = updated
+  await authStore.updatePreferences({ dashboard_layout: updated })
+}
 
 // Floor options with "All" option
 const floorOptions = computed(() => [
@@ -362,6 +519,31 @@ const roomOptions = computed(() => {
   return rooms.value
     .filter(r => r.floor === selectedFloor.value && r.type !== 'utility' && r.type !== 'common')
     .map(r => ({ id: r.id, label: `${r.name} (${r.id})` }))
+})
+
+const compareRoomOptions = computed(() => {
+  return rooms.value
+    .filter(r => r.type !== 'utility' && r.type !== 'common')
+    .map(r => ({ title: `${r.name} (${r.id})`, value: r.id }))
+})
+
+const compareCards = computed(() => {
+  if (!selectedCompareRooms.value.length) return []
+  return selectedCompareRooms.value.slice(0, 6).map(roomId => {
+    const room = rooms.value.find(r => r.id === roomId)
+    const temp = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'temperature')
+    const hum = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'humidity')
+    const pres = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'presence')
+
+    return {
+      roomId,
+      roomName: room?.name || roomId,
+      temperature: temp?.value ?? null,
+      humidity: hum?.value ?? null,
+      presence: Boolean(pres?.value),
+      status: temp?.status || hum?.status || pres?.status || 'offline'
+    }
+  })
 })
 
 // Selected room data
@@ -672,8 +854,20 @@ watch(chartPeriod, () => {
   generateChartData()
 })
 
+watch(() => preferences.value?.dashboard_layout, (newLayout) => {
+  if (newLayout) {
+    layout.value = newLayout
+    syncWidgetOptions()
+  }
+})
+
 onMounted(() => {
   // Generate initial chart data
   generateChartData()
+
+  if (preferences.value?.dashboard_layout) {
+    layout.value = preferences.value.dashboard_layout
+  }
+  syncWidgetOptions()
 })
 </script>

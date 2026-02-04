@@ -8,6 +8,7 @@ export const useAlertsStore = defineStore('alerts', () => {
   const rules = ref([])
   const loading = ref(false)
   const error = ref(null)
+  const cacheKey = 'campus-iot-alerts-cache'
 
   // Getters
   const activeAlerts = computed(() => 
@@ -29,11 +30,27 @@ export const useAlertsStore = defineStore('alerts', () => {
     try {
       const response = await axios.get('/api/alerts', { params })
       alerts.value = response.data
+      localStorage.setItem(cacheKey, JSON.stringify({
+        alerts: alerts.value,
+        cachedAt: new Date().toISOString()
+      }))
     } catch (e) {
       error.value = e.message
       console.error('Failed to fetch alerts:', e)
+      loadCache()
     } finally {
       loading.value = false
+    }
+  }
+
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(cacheKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      alerts.value = parsed.alerts || []
+    } catch (e) {
+      console.warn('Failed to load alerts cache:', e)
     }
   }
 
@@ -43,6 +60,37 @@ export const useAlertsStore = defineStore('alerts', () => {
       rules.value = response.data
     } catch (e) {
       console.error('Failed to fetch alert rules:', e)
+    }
+  }
+
+  async function createRule(payload) {
+    try {
+      const response = await axios.post('/api/alerts/rules', payload)
+      rules.value.unshift(response.data)
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.response?.data?.detail || e.message }
+    }
+  }
+
+  async function updateRule(ruleId, payload) {
+    try {
+      const response = await axios.patch(`/api/alerts/rules/${ruleId}`, payload)
+      const idx = rules.value.findIndex(r => r.id === ruleId)
+      if (idx !== -1) rules.value[idx] = response.data
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.response?.data?.detail || e.message }
+    }
+  }
+
+  async function deleteRule(ruleId) {
+    try {
+      await axios.delete(`/api/alerts/rules/${ruleId}`)
+      rules.value = rules.value.filter(r => r.id !== ruleId)
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.response?.data?.detail || e.message }
     }
   }
 
@@ -83,8 +131,12 @@ export const useAlertsStore = defineStore('alerts', () => {
     activeAlerts,
     alertsByPriority,
     activeCount,
+    loadCache,
     fetchAlerts,
     fetchRules,
+    createRule,
+    updateRule,
+    deleteRule,
     acknowledgeAlert,
     acknowledgeAll,
     addAlert

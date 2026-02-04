@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     secret_key: str = "super_secret_key_change_me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 
+
+    # Backups
+    backups_enabled: bool = False
+    backup_interval_minutes: int = 1440
+    backup_retention_days: int = 7
+    backup_dir: str = "/app/backups"
+
+    # Exports
+    exports_enabled: bool = False
+    export_check_interval_seconds: int = 60
+    export_dir: str = "/app/exports"
     
     class Config:
         env_file = ".env"

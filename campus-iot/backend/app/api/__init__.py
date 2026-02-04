@@ -5,3 +5,7 @@ from .dashboard import router as dashboard_router
 from .auth import router as auth_router
 from .activity import router as activity_router
 from .reports import router as reports_router
+from .backups import router as backups_router
+from .anomalies import router as anomalies_router
+from .integrations import router as integrations_router
+from .audit import router as audit_router

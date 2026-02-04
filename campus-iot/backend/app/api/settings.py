@@ -2,7 +2,7 @@
 System Settings & User Preferences API
 Synced to Supabase for all users
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -13,6 +13,7 @@ from models.settings import SystemSetting, UserPreference
 from models.user import User
 from api.auth import get_current_user, get_current_admin, get_control_user
 from services.websocket_manager import ws_manager
+from services.audit_service import log_audit
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -48,6 +49,19 @@ def setting_to_response(setting: SystemSetting) -> SettingResponse:
         description=setting.description,
         updated_at=setting.updated_at.isoformat() if setting.updated_at else datetime.utcnow().isoformat()
     )
+
+
+def setting_snapshot(setting: SystemSetting) -> dict:
+    return {
+        "id": setting.id,
+        "key": setting.key,
+        "value": setting.value,
+        "value_type": setting.value_type,
+        "category": setting.category,
+        "description": setting.description,
+        "updated_by_user_id": setting.updated_by_user_id,
+        "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
+    }
 
 
 def parse_setting_value(value: str, value_type: str):
@@ -113,13 +127,15 @@ async def update_setting(
     key: str,
     data: SettingUpdate,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Update a system setting (admin only)"""
     setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
     if not setting:
         raise HTTPException(status_code=404, detail="Setting not found")
     
+    before = setting_snapshot(setting)
     setting.value = data.value
     setting.updated_by_user_id = current_user.id
     setting.updated_at = datetime.utcnow()
@@ -133,6 +149,18 @@ async def update_setting(
         "key": key,
         "value": parse_setting_value(setting.value, setting.value_type)
     })
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="system_setting",
+        entity_id=setting.id,
+        before=before,
+        after=setting_snapshot(setting),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return setting_to_response(setting)
 
@@ -145,7 +173,8 @@ async def update_heating_setting(
     key: str,
     data: SettingUpdate,
     current_user: User = Depends(get_control_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Update heating settings (requires control permission: admin, technician, manager)"""
     if key not in HEATING_KEYS:
@@ -155,6 +184,7 @@ async def update_heating_setting(
     
     # Create if not exists
     if not setting:
+        before = None
         setting = SystemSetting(
             key=key,
             value=data.value,
@@ -165,6 +195,7 @@ async def update_heating_setting(
         )
         db.add(setting)
     else:
+        before = setting_snapshot(setting)
         setting.value = data.value
         setting.updated_by_user_id = current_user.id
         setting.updated_at = datetime.utcnow()
@@ -178,6 +209,18 @@ async def update_heating_setting(
         "key": key,
         "value": parse_setting_value(setting.value, setting.value_type)
     })
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update" if before else "create",
+        entity_type="system_setting",
+        entity_id=setting.id,
+        before=before,
+        after=setting_snapshot(setting),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return setting_to_response(setting)
 
@@ -186,17 +229,31 @@ async def update_heating_setting(
 async def update_settings_bulk(
     settings: Dict[str, str],
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Update multiple settings at once (admin only)"""
     updated = []
     for key, value in settings.items():
         setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
         if setting:
+            before = setting_snapshot(setting)
             setting.value = value
             setting.updated_by_user_id = current_user.id
             setting.updated_at = datetime.utcnow()
             updated.append(key)
+
+            log_audit(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="update",
+                entity_type="system_setting",
+                entity_id=setting.id,
+                before=before,
+                after=setting_snapshot(setting),
+                ip_address=request.client.host if request and request.client else None
+            )
     
     db.commit()
     

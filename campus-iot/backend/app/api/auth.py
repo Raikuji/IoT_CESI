@@ -14,6 +14,7 @@ import random
 
 from db.database import get_db
 from models.user import User, ActivityLog
+from services.audit_service import log_audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -46,7 +47,7 @@ ROLES = {
         "description": "Supervision et rapports",
         "color": "#8b5cf6",
         "icon": "mdi-account-tie",
-        "permissions": ["dashboard", "sensors", "alerts", "building", "reports", "control"]
+        "permissions": ["dashboard", "sensors", "alerts", "building", "reports", "control", "audit"]
     },
     "user": {
         "name": "Utilisateur",
@@ -157,6 +158,21 @@ def user_to_response(user: User) -> UserResponse:
     )
 
 
+def user_snapshot(user: User) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": user.role,
+        "department": user.department,
+        "avatar_color": user.avatar_color,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login": user.last_login.isoformat() if user.last_login else None
+    }
+
+
 def log_activity(db: Session, user_id: int, user_email: str, action: str, details: str = None, ip: str = None):
     """Log user activity to database"""
     try:
@@ -219,6 +235,19 @@ def require_permission(permission: str):
                 detail=f"Permission '{permission}' required"
             )
         return current_user
+    return check_permission
+
+
+def require_any_permission(permissions: List[str]):
+    """Dependency to require at least one permission from a list"""
+    async def check_permission(current_user: User = Depends(get_current_user)) -> User:
+        for perm in permissions:
+            if has_permission(current_user, perm):
+                return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"One of permissions {permissions} required"
+        )
     return check_permission
 
 
@@ -322,8 +351,10 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def update_profile(
     data: UserUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
+    before = user_snapshot(current_user)
     if data.first_name:
         current_user.first_name = data.first_name
     if data.last_name:
@@ -337,6 +368,17 @@ async def update_profile(
     db.refresh(current_user)
     
     log_activity(db, current_user.id, current_user.email, "profile_update", "Profile updated")
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="user_profile",
+        entity_id=current_user.id,
+        before=before,
+        after=user_snapshot(current_user),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return user_to_response(current_user)
 
@@ -380,11 +422,14 @@ async def update_user(
     user_id: int,
     data: UserUpdate,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    before = user_snapshot(target_user)
     
     if data.first_name is not None:
         target_user.first_name = data.first_name
@@ -400,7 +445,18 @@ async def update_user(
     db.commit()
     db.refresh(target_user)
     
-    log_activity(db, current_user.id, current_user.email, "admin_update_user", f"Updated user {target_user.email}")
+    log_activity(db, current_user.id, current_user.email, "user_updated", f"Updated user {target_user.email}")
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="user",
+        entity_id=target_user.id,
+        before=before,
+        after=user_snapshot(target_user),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return user_to_response(target_user)
 
@@ -410,11 +466,14 @@ async def update_user_role(
     user_id: int,
     role_data: RoleUpdate,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    before = user_snapshot(target_user)
     
     if target_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
@@ -426,7 +485,18 @@ async def update_user_role(
     db.commit()
     db.refresh(target_user)
     
-    log_activity(db, current_user.id, current_user.email, "admin_change_role", f"Changed {target_user.email} role to {role_data.role}")
+    log_activity(db, current_user.id, current_user.email, "role_changed", f"Changed {target_user.email} role to {role_data.role}")
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="user_role",
+        entity_id=target_user.id,
+        before=before,
+        after=user_snapshot(target_user),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return {"success": True, "user": user_to_response(target_user)}
 
@@ -435,7 +505,8 @@ async def update_user_role(
 async def delete_user(
     user_id: int,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
@@ -445,10 +516,22 @@ async def delete_user(
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
     email = target_user.email
+    before = user_snapshot(target_user)
     db.delete(target_user)
     db.commit()
     
-    log_activity(db, current_user.id, current_user.email, "admin_delete_user", f"Deleted user {email}")
+    log_activity(db, current_user.id, current_user.email, "user_deleted", f"Deleted user {email}")
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="delete",
+        entity_type="user",
+        entity_id=user_id,
+        before=before,
+        after=None,
+        ip_address=request.client.host if request and request.client else None
+    )
     
     return {"success": True}
 

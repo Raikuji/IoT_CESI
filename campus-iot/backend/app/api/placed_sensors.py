@@ -2,7 +2,7 @@
 Placed Sensors API - Sensors placed on the building plan
 Synced to Supabase for all users
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
@@ -11,8 +11,9 @@ from datetime import datetime
 from db.database import get_db
 from models.settings import PlacedSensor
 from models.user import User
-from api.auth import get_current_user
+from api.auth import require_permission, require_any_permission
 from services.websocket_manager import ws_manager
+from services.audit_service import log_audit
 
 router = APIRouter(prefix="/placed-sensors", tags=["Placed Sensors"])
 
@@ -73,10 +74,29 @@ def sensor_to_response(sensor: PlacedSensor) -> PlacedSensorResponse:
     )
 
 
+def placed_sensor_snapshot(sensor: PlacedSensor) -> dict:
+    return {
+        "id": sensor.id,
+        "room_id": sensor.room_id,
+        "sensor_type": sensor.sensor_type,
+        "position_x": sensor.position_x,
+        "position_y": sensor.position_y,
+        "position_z": sensor.position_z,
+        "name": sensor.name,
+        "current_value": sensor.current_value,
+        "status": sensor.status,
+        "placed_by_user_id": sensor.placed_by_user_id,
+        "placed_by_email": sensor.placed_by_email,
+        "created_at": sensor.created_at.isoformat() if sensor.created_at else None,
+        "last_update": sensor.last_update.isoformat() if sensor.last_update else None
+    }
+
+
 @router.get("/", response_model=List[PlacedSensorResponse])
 async def get_all_placed_sensors(
     room_id: Optional[str] = None,
     sensor_type: Optional[str] = None,
+    current_user: User = Depends(require_any_permission(["building", "dashboard"])),
     db: Session = Depends(get_db)
 ):
     """Get all placed sensors, optionally filtered by room or type"""
@@ -92,7 +112,11 @@ async def get_all_placed_sensors(
 
 
 @router.get("/{sensor_id}", response_model=PlacedSensorResponse)
-async def get_placed_sensor(sensor_id: int, db: Session = Depends(get_db)):
+async def get_placed_sensor(
+    sensor_id: int,
+    current_user: User = Depends(require_any_permission(["building", "dashboard"])),
+    db: Session = Depends(get_db)
+):
     """Get a specific placed sensor"""
     sensor = db.query(PlacedSensor).filter(PlacedSensor.id == sensor_id).first()
     if not sensor:
@@ -103,8 +127,9 @@ async def get_placed_sensor(sensor_id: int, db: Session = Depends(get_db)):
 @router.post("/", response_model=PlacedSensorResponse, status_code=status.HTTP_201_CREATED)
 async def create_placed_sensor(
     data: PlacedSensorCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_permission("building")),
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Place a new sensor on the building plan"""
     sensor = PlacedSensor(
@@ -122,6 +147,18 @@ async def create_placed_sensor(
     db.add(sensor)
     db.commit()
     db.refresh(sensor)
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="create",
+        entity_type="placed_sensor",
+        entity_id=sensor.id,
+        before=None,
+        after=placed_sensor_snapshot(sensor),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     # Broadcast to all connected clients
     await ws_manager.broadcast({
@@ -136,14 +173,16 @@ async def create_placed_sensor(
 async def update_placed_sensor(
     sensor_id: int,
     data: PlacedSensorUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_permission("building")),
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Update a placed sensor position or value"""
     sensor = db.query(PlacedSensor).filter(PlacedSensor.id == sensor_id).first()
     if not sensor:
         raise HTTPException(status_code=404, detail="Sensor not found")
     
+    before = placed_sensor_snapshot(sensor)
     if data.position_x is not None:
         sensor.position_x = data.position_x
     if data.position_y is not None:
@@ -160,6 +199,18 @@ async def update_placed_sensor(
     
     db.commit()
     db.refresh(sensor)
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update",
+        entity_type="placed_sensor",
+        entity_id=sensor.id,
+        before=before,
+        after=placed_sensor_snapshot(sensor),
+        ip_address=request.client.host if request and request.client else None
+    )
     
     # Broadcast update
     await ws_manager.broadcast({
@@ -173,8 +224,9 @@ async def update_placed_sensor(
 @router.delete("/{sensor_id}")
 async def delete_placed_sensor(
     sensor_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_permission("building")),
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Remove a placed sensor"""
     sensor = db.query(PlacedSensor).filter(PlacedSensor.id == sensor_id).first()
@@ -182,8 +234,21 @@ async def delete_placed_sensor(
         raise HTTPException(status_code=404, detail="Sensor not found")
     
     room_id = sensor.room_id
+    before = placed_sensor_snapshot(sensor)
     db.delete(sensor)
     db.commit()
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="delete",
+        entity_type="placed_sensor",
+        entity_id=sensor_id,
+        before=before,
+        after=None,
+        ip_address=request.client.host if request and request.client else None
+    )
     
     # Broadcast deletion
     await ws_manager.broadcast({
@@ -198,8 +263,9 @@ async def delete_placed_sensor(
 @router.post("/bulk", response_model=List[PlacedSensorResponse])
 async def bulk_create_sensors(
     sensors: List[PlacedSensorCreate],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_permission("building")),
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """Create multiple sensors at once"""
     created = []
@@ -223,6 +289,19 @@ async def bulk_create_sensors(
     # Refresh all
     for s in created:
         db.refresh(s)
+
+    for s in created:
+        log_audit(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="create",
+            entity_type="placed_sensor",
+            entity_id=s.id,
+            before=None,
+            after=placed_sensor_snapshot(s),
+            ip_address=request.client.host if request and request.client else None
+        )
     
     # Broadcast
     await ws_manager.broadcast({
@@ -234,7 +313,11 @@ async def bulk_create_sensors(
 
 
 @router.get("/room/{room_id}", response_model=List[PlacedSensorResponse])
-async def get_room_sensors(room_id: str, db: Session = Depends(get_db)):
+async def get_room_sensors(
+    room_id: str,
+    current_user: User = Depends(require_any_permission(["building", "dashboard"])),
+    db: Session = Depends(get_db)
+):
     """Get all sensors in a specific room"""
     sensors = db.query(PlacedSensor).filter(PlacedSensor.room_id == room_id).all()
     return [sensor_to_response(s) for s in sensors]

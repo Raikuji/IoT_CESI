@@ -85,6 +85,7 @@ export const useBuildingStore = defineStore('building', () => {
 
   // Sensors placed in rooms - NOW SYNCED FROM API
   const sensors = ref([])
+  const cacheKey = 'campus-iot-placed-sensors-cache'
 
   // Available sensor types for drag & drop
   const sensorTypes = ref([
@@ -143,10 +144,26 @@ export const useBuildingStore = defineStore('building', () => {
         placedBy: s.placed_by_email,
         lastUpdate: s.last_update
       }))
+      localStorage.setItem(cacheKey, JSON.stringify({
+        sensors: sensors.value,
+        cachedAt: new Date().toISOString()
+      }))
     } catch (e) {
       console.error('Failed to fetch placed sensors:', e)
+      loadCache()
     } finally {
       loading.value = false
+    }
+  }
+
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(cacheKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      sensors.value = parsed.sensors || []
+    } catch (e) {
+      console.warn('Failed to load placed sensors cache:', e)
     }
   }
 
@@ -341,6 +358,7 @@ export const useBuildingStore = defineStore('building', () => {
     totalRooms,
     totalSensors,
     onlineSensors,
+    loadCache,
     setFloor,
     fetchSensors,
     addSensor,

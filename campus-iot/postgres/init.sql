@@ -22,28 +22,40 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     value DOUBLE PRECISION NOT NULL
 );
 
--- Alerts table
-CREATE TABLE IF NOT EXISTS alerts (
-    id SERIAL PRIMARY KEY,
-    sensor_id INTEGER REFERENCES sensors(id) ON DELETE SET NULL,
-    type VARCHAR(50) NOT NULL,
-    message TEXT,
-    severity VARCHAR(20) DEFAULT 'warning',
-    is_acknowledged BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    acknowledged_at TIMESTAMPTZ
-);
-
 -- Alert rules table
 CREATE TABLE IF NOT EXISTS alert_rules (
     id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
     sensor_id INTEGER REFERENCES sensors(id) ON DELETE CASCADE,
+    sensor_type VARCHAR(50),
+    room_id VARCHAR(50),
     condition VARCHAR(20) NOT NULL,
     threshold DOUBLE PRECISION NOT NULL,
     message TEXT,
     severity VARCHAR(20) DEFAULT 'warning',
     is_active BOOLEAN DEFAULT true,
+    active_days JSONB DEFAULT '[]',
+    active_time_start VARCHAR(5),
+    active_time_end VARCHAR(5),
+    cooldown_minutes INTEGER DEFAULT 5,
+    escalation_minutes INTEGER,
+    escalation_severity VARCHAR(20),
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Alerts table
+CREATE TABLE IF NOT EXISTS alerts (
+    id SERIAL PRIMARY KEY,
+    sensor_id INTEGER REFERENCES sensors(id) ON DELETE SET NULL,
+    rule_id INTEGER REFERENCES alert_rules(id) ON DELETE SET NULL,
+    type VARCHAR(50) NOT NULL,
+    message TEXT,
+    severity VARCHAR(20) DEFAULT 'warning',
+    is_acknowledged BOOLEAN DEFAULT false,
+    escalation_level INTEGER DEFAULT 0,
+    escalated_from_alert_id INTEGER REFERENCES alerts(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    acknowledged_at TIMESTAMPTZ
 );
 
 -- Actuators table
@@ -90,6 +102,57 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     action VARCHAR(100) NOT NULL,
     details TEXT,
     ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Anomalies
+CREATE TABLE IF NOT EXISTS anomalies (
+    id SERIAL PRIMARY KEY,
+    sensor_id INTEGER REFERENCES sensors(id) ON DELETE SET NULL,
+    anomaly_type VARCHAR(50) NOT NULL,
+    message TEXT,
+    severity VARCHAR(20) DEFAULT 'warning',
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit logs (who changed what and when)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    user_email VARCHAR(255),
+    action VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(100) NOT NULL,
+    entity_id VARCHAR(100),
+    before_data JSONB,
+    after_data JSONB,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Webhook endpoints
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    secret VARCHAR(200),
+    event_types JSONB DEFAULT '[]',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Export configurations
+CREATE TABLE IF NOT EXISTS export_configs (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    resource VARCHAR(50) NOT NULL,
+    format VARCHAR(10) DEFAULT 'csv',
+    interval_minutes INTEGER DEFAULT 1440,
+    time_window_hours INTEGER DEFAULT 24,
+    target VARCHAR(20) DEFAULT 'file',
+    webhook_id INTEGER REFERENCES webhook_endpoints(id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT true,
+    last_run_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -152,6 +215,10 @@ CREATE INDEX IF NOT EXISTS idx_sensor_data_time ON sensor_data (time DESC);
 CREATE INDEX IF NOT EXISTS idx_sensor_data_sensor ON sensor_data (sensor_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alerts (is_acknowledged);
+CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts (rule_id);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_sensor ON alert_rules (sensor_id);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_room ON alert_rules (room_id);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_type ON alert_rules (sensor_type);
 CREATE INDEX IF NOT EXISTS idx_blockchain_index ON blockchain (block_index);
 CREATE INDEX IF NOT EXISTS idx_blockchain_hash ON blockchain (hash);
 CREATE INDEX IF NOT EXISTS idx_security_alerts_timestamp ON security_alerts (timestamp DESC);
@@ -159,6 +226,14 @@ CREATE INDEX IF NOT EXISTS idx_security_alerts_resolved ON security_alerts (reso
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_created ON activity_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anomalies_sensor ON anomalies (sensor_id);
+CREATE INDEX IF NOT EXISTS idx_anomalies_type ON anomalies (anomaly_type);
+CREATE INDEX IF NOT EXISTS idx_anomalies_created ON anomalies (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhook_endpoints (is_active);
+CREATE INDEX IF NOT EXISTS idx_exports_active ON export_configs (is_active);
 CREATE INDEX IF NOT EXISTS idx_reports_room ON reports (room_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status);
 
@@ -209,6 +284,23 @@ INSERT INTO system_settings (key, value, value_type, category, description) VALU
     ('humidity_max', '70', 'number', 'alerts', 'Humidité maximum (%)'),
     ('co2_max', '1000', 'number', 'alerts', 'CO2 maximum (ppm)'),
     ('presence_timeout', '300', 'number', 'alerts', 'Timeout présence (secondes)'),
+    ('anomaly_min_samples', '8', 'number', 'anomalies', 'Échantillons minimum pour détection'),
+    ('anomaly_spike_z', '3.0', 'number', 'anomalies', 'Seuil Z-score pour pics'),
+    ('anomaly_stuck_window', '10', 'number', 'anomalies', 'Fenêtre détection capteur bloqué'),
+    ('anomaly_stuck_epsilon', '0.001', 'number', 'anomalies', 'Tolérance capteur bloqué'),
+    ('anomaly_drift_window', '10', 'number', 'anomalies', 'Fenêtre détection dérive'),
+    ('anomaly_drift_slope', '0.05', 'number', 'anomalies', 'Seuil pente dérive'),
+    ('anomaly_cooldown_minutes', '30', 'number', 'anomalies', 'Cooldown anomalies (minutes)'),
+    ('energy_saving_enabled', 'false', 'boolean', 'energy', 'Mode économie d\'énergie'),
+    ('energy_saving_refresh_interval', '120', 'number', 'energy', 'Intervalle rafraîchissement eco (secondes)'),
+    ('energy_saving_refresh_interval_night', '300', 'number', 'energy', 'Intervalle rafraîchissement nuit (secondes)'),
+    ('energy_saving_disable_live', 'true', 'boolean', 'energy', 'Désactiver le temps réel en eco'),
+    ('energy_profile', 'normal', 'string', 'energy', 'Profil énergie actif'),
+    ('energy_schedule_enabled', 'false', 'boolean', 'energy', 'Planning économie d\'énergie'),
+    ('energy_schedule_profile', 'eco', 'string', 'energy', 'Profil planifié (eco/nuit)'),
+    ('energy_schedule_days', '[]', 'json', 'energy', 'Jours actifs du planning'),
+    ('energy_schedule_start', '22:00', 'string', 'energy', 'Début planning'),
+    ('energy_schedule_end', '06:00', 'string', 'energy', 'Fin planning'),
     ('email_notifications', 'true', 'boolean', 'notifications', 'Activer notifications email'),
     ('push_notifications', 'true', 'boolean', 'notifications', 'Activer notifications push'),
     ('default_theme', 'dark', 'string', 'appearance', 'Thème par défaut'),
