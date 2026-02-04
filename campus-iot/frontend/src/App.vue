@@ -148,7 +148,7 @@
           </v-chip>
 
           <!-- Notifications -->
-          <v-btn icon variant="text" class="mr-2">
+          <v-btn icon variant="text" class="mr-2" @click="goToAlerts" :disabled="!canAlerts">
             <v-badge
               :content="alertCount"
               :model-value="alertCount > 0"
@@ -258,6 +258,13 @@ const alertsStore = useAlertsStore()
 const buildingStore = useBuildingStore()
 const settingsStore = useSettingsStore()
 const isOnline = ref(navigator.onLine)
+
+const goToAlerts = () => {
+  if (!canAlerts.value) return
+  if (router.currentRoute.value.path !== '/alerts') {
+    router.push('/alerts')
+  }
+}
 
 // WebSocket
 const { connected: wsConnected, disconnect: wsDisconnect, reconnect: wsReconnect } = useWebSocket()

@@ -100,15 +100,6 @@
               </v-col>
               <v-col cols="12" sm="6" md="3">
                 <v-select
-                  v-model="filterStatus"
-                  :items="statusOptions"
-                  label="Statut"
-                  clearable
-                  hide-details
-                ></v-select>
-              </v-col>
-              <v-col cols="12" sm="6" md="3">
-                <v-select
                   v-model="filterType"
                   :items="typeOptions"
                   label="Type"
@@ -130,57 +121,98 @@
         </v-card>
 
         <!-- Alerts List -->
-        <v-card color="surface">
-          <v-data-table
-            :headers="headers"
-            :items="filteredAlerts"
-            :search="search"
-            :loading="loading"
-            class="bg-transparent"
-          >
-            <template v-slot:item.severity="{ item }">
-              <v-chip :color="getSeverityColor(item.severity)" size="small" variant="tonal">
-                <v-icon start size="small">{{ getSeverityIcon(item.severity) }}</v-icon>
-                {{ item.severity }}
-              </v-chip>
-            </template>
+        <v-expansion-panels v-model="alertsPanels" multiple class="mb-6">
+          <v-expansion-panel value="active">
+            <v-expansion-panel-title>
+              Alertes à traiter ({{ activeAlertsList.length }})
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-card color="surface">
+                <v-data-table
+                  :headers="headers"
+                  :items="activeAlertsList"
+                  :search="search"
+                  :loading="loading"
+                  class="bg-transparent"
+                >
+                  <template v-slot:item.severity="{ item }">
+                    <v-chip :color="getSeverityColor(item.severity)" size="small" variant="tonal">
+                      <v-icon start size="small">{{ getSeverityIcon(item.severity) }}</v-icon>
+                      {{ item.severity }}
+                    </v-chip>
+                  </template>
 
-            <template v-slot:item.message="{ item }">
-              <div class="py-2">
-                <div class="font-weight-medium">{{ item.message }}</div>
-                <div class="text-body-2 text-medium-emphasis">{{ item.type }}</div>
-              </div>
-            </template>
+                  <template v-slot:item.message="{ item }">
+                    <div class="py-2">
+                      <div class="font-weight-medium">{{ item.message }}</div>
+                      <div class="text-body-2 text-medium-emphasis">{{ item.type }}</div>
+                    </div>
+                  </template>
 
-            <template v-slot:item.created_at="{ item }">
-              {{ formatDate(item.created_at) }}
-            </template>
+                  <template v-slot:item.created_at="{ item }">
+                    {{ formatDate(item.created_at) }}
+                  </template>
 
-            <template v-slot:item.is_acknowledged="{ item }">
-              <v-chip
-                :color="item.is_acknowledged ? 'success' : 'warning'"
-                size="small"
-                variant="tonal"
-              >
-                {{ item.is_acknowledged ? 'Acquitté' : 'Actif' }}
-              </v-chip>
-            </template>
+                  <template v-slot:item.is_acknowledged="{ item }">
+                    <v-chip color="warning" size="small" variant="tonal">Actif</v-chip>
+                  </template>
 
-            <template v-slot:item.actions="{ item }">
-              <v-btn
-                v-if="!item.is_acknowledged"
-                icon
-                variant="text"
-                size="small"
-                color="success"
-                @click="acknowledge(item.id)"
-              >
-                <v-icon>mdi-check</v-icon>
-                <v-tooltip activator="parent">Acquitter</v-tooltip>
-              </v-btn>
-            </template>
-          </v-data-table>
-        </v-card>
+                  <template v-slot:item.actions="{ item }">
+                    <v-btn
+                      icon
+                      variant="text"
+                      size="small"
+                      color="success"
+                      @click="acknowledge(item.id)"
+                    >
+                      <v-icon>mdi-check</v-icon>
+                      <v-tooltip activator="parent">Acquitter</v-tooltip>
+                    </v-btn>
+                  </template>
+                </v-data-table>
+              </v-card>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+
+          <v-expansion-panel value="resolved">
+            <v-expansion-panel-title>
+              Alertes résolues ({{ resolvedAlertsList.length }})
+            </v-expansion-panel-title>
+            <v-expansion-panel-text>
+              <v-card color="surface">
+                <v-data-table
+                  :headers="headers"
+                  :items="resolvedAlertsList"
+                  :search="search"
+                  :loading="loading"
+                  class="bg-transparent"
+                >
+                  <template v-slot:item.severity="{ item }">
+                    <v-chip :color="getSeverityColor(item.severity)" size="small" variant="tonal">
+                      <v-icon start size="small">{{ getSeverityIcon(item.severity) }}</v-icon>
+                      {{ item.severity }}
+                    </v-chip>
+                  </template>
+
+                  <template v-slot:item.message="{ item }">
+                    <div class="py-2">
+                      <div class="font-weight-medium">{{ item.message }}</div>
+                      <div class="text-body-2 text-medium-emphasis">{{ item.type }}</div>
+                    </div>
+                  </template>
+
+                  <template v-slot:item.created_at="{ item }">
+                    {{ formatDate(item.created_at) }}
+                  </template>
+
+                  <template v-slot:item.is_acknowledged="{ item }">
+                    <v-chip color="success" size="small" variant="tonal">Acquitté</v-chip>
+                  </template>
+                </v-data-table>
+              </v-card>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
       </v-window-item>
 
       <v-window-item value="rules">
@@ -375,8 +407,8 @@ const { sensors } = storeToRefs(sensorsStore)
 const tab = ref('alerts')
 const search = ref('')
 const filterSeverity = ref(null)
-const filterStatus = ref(null)
 const filterType = ref(null)
+const alertsPanels = ref(['active'])
 
 const ruleSaving = ref(false)
 const ruleError = ref('')
@@ -430,10 +462,6 @@ const severityOptions = [
   { title: 'Information', value: 'info' }
 ]
 
-const statusOptions = [
-  { title: 'Actif', value: false },
-  { title: 'Acquitté', value: true }
-]
 
 const typeOptions = [
   { title: 'Seuils', value: 'threshold' },
@@ -484,9 +512,6 @@ const filteredAlerts = computed(() => {
     result = result.filter(a => a.severity === filterSeverity.value)
   }
 
-  if (filterStatus.value !== null) {
-    result = result.filter(a => a.is_acknowledged === filterStatus.value)
-  }
 
   if (filterType.value === 'anomaly') {
     result = result.filter(a => String(a.type || '').startsWith('anomaly_'))
@@ -498,6 +523,9 @@ const filteredAlerts = computed(() => {
 
   return result
 })
+
+const activeAlertsList = computed(() => filteredAlerts.value.filter(a => !a.is_acknowledged))
+const resolvedAlertsList = computed(() => filteredAlerts.value.filter(a => a.is_acknowledged))
 
 const rulesLoading = computed(() => false)
 

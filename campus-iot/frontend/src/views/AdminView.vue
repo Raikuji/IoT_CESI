@@ -30,10 +30,6 @@
                 <v-icon size="32">mdi-account-group</v-icon>
               </div>
             </div>
-            <div class="stat-trend mt-3">
-              <v-icon size="14" color="success">mdi-trending-up</v-icon>
-              <span class="text-caption ml-1">+{{ recentLoginsCount }} actifs aujourd'hui</span>
-            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -259,7 +255,6 @@
               <v-list-item
                 v-for="(role, key) in roles"
                 :key="key"
-                class="role-item"
               >
                 <template v-slot:prepend>
                   <v-avatar :color="role.color" size="36">
@@ -289,6 +284,16 @@
             <span class="font-weight-bold">Backups DB</span>
             <v-spacer />
             <v-btn
+              v-if="backups.length > backupPreviewLimit"
+              size="small"
+              variant="tonal"
+              color="primary"
+              class="mr-2"
+              @click="showAllBackups = !showAllBackups"
+            >
+              {{ showAllBackups ? 'Réduire' : 'Voir tout' }}
+            </v-btn>
+            <v-btn
               size="small"
               color="primary"
               variant="tonal"
@@ -305,7 +310,7 @@
               Rétention auto: {{ backupRetentionDays }} jours
             </div>
             <v-list v-if="backups.length" density="compact" class="backup-list">
-              <v-list-item v-for="item in backups" :key="item.name" class="backup-item">
+              <v-list-item v-for="item in visibleBackups" :key="item.name" class="backup-item">
                 <template v-slot:prepend>
                   <v-avatar color="primary" size="32" variant="tonal">
                     <v-icon size="16">mdi-archive</v-icon>
@@ -365,6 +370,9 @@
                 <template v-slot:append>
                   <v-btn size="x-small" variant="text" @click="testWebhook(hook)">
                     Tester
+                  </v-btn>
+                  <v-btn size="x-small" variant="text" @click="openWebhookEdit(hook)">
+                    Modifier
                   </v-btn>
                   <v-btn size="x-small" color="error" variant="text" @click="deleteWebhook(hook)">
                     Supprimer
@@ -633,7 +641,7 @@
       <v-card>
         <v-card-title class="d-flex align-center pa-6 pb-4">
           <v-icon start color="primary">mdi-webhook</v-icon>
-          <span class="text-h6">Nouveau webhook</span>
+          <span class="text-h6">{{ webhookDialog.is_edit ? 'Modifier le webhook' : 'Nouveau webhook' }}</span>
         </v-card-title>
         <v-divider />
         <v-card-text class="pa-6">
@@ -655,7 +663,9 @@
         <v-card-actions class="pa-4">
           <v-spacer />
           <v-btn variant="text" @click="webhookDialog.show = false">Annuler</v-btn>
-          <v-btn color="primary" :loading="webhookDialog.loading" @click="saveWebhook">Créer</v-btn>
+          <v-btn color="primary" :loading="webhookDialog.loading" @click="saveWebhook">
+            {{ webhookDialog.is_edit ? 'Mettre à jour' : 'Créer' }}
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -764,12 +774,16 @@ const snackbar = ref({
 const backups = ref([])
 const backupRunning = ref(false)
 const backupRetentionDays = ref(7)
+const showAllBackups = ref(false)
+const backupPreviewLimit = 8
 
 const webhooks = ref([])
 const exports = ref([])
 
 const webhookDialog = ref({
   show: false,
+  id: null,
+  is_edit: false,
   name: '',
   url: '',
   secret: '',
@@ -842,6 +856,9 @@ const activePercentage = computed(() => {
 })
 
 const recentLoginsCount = computed(() => stats.value.recent_logins?.length || 0)
+const visibleBackups = computed(() =>
+  showAllBackups.value ? backups.value : backups.value.slice(0, backupPreviewLimit)
+)
 
 // Methods
 function getInitials(user) {
@@ -926,6 +943,8 @@ async function fetchIntegrations() {
 function openWebhookDialog() {
   webhookDialog.value = {
     show: true,
+    id: null,
+    is_edit: false,
     name: '',
     url: '',
     secret: '',
@@ -935,19 +954,39 @@ function openWebhookDialog() {
   }
 }
 
+function openWebhookEdit(hook) {
+  webhookDialog.value = {
+    show: true,
+    id: hook.id,
+    is_edit: true,
+    name: hook.name,
+    url: hook.url,
+    secret: '',
+    event_types: Array.isArray(hook.event_types) ? hook.event_types : [],
+    is_active: hook.is_active,
+    loading: false
+  }
+}
+
 async function saveWebhook() {
   webhookDialog.value.loading = true
   try {
-    await axios.post('/api/integrations/webhooks', {
+    const payload = {
       name: webhookDialog.value.name,
       url: webhookDialog.value.url,
       secret: webhookDialog.value.secret || null,
       event_types: webhookDialog.value.event_types || [],
       is_active: webhookDialog.value.is_active
-    })
+    }
+    if (webhookDialog.value.is_edit && webhookDialog.value.id) {
+      await axios.patch(`/api/integrations/webhooks/${webhookDialog.value.id}`, payload)
+      showNotification('Webhook mis à jour')
+    } else {
+      await axios.post('/api/integrations/webhooks', payload)
+      showNotification('Webhook créé')
+    }
     await fetchIntegrations()
     webhookDialog.value.show = false
-    showNotification('Webhook créé')
   } catch (e) {
     showNotification(e.response?.data?.detail || 'Erreur webhook', 'error')
   } finally {

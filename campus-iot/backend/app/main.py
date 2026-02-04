@@ -3,6 +3,7 @@ Campus IoT API - Main Application
 """
 import asyncio
 import logging
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from sqlalchemy import or_, desc
@@ -19,6 +20,7 @@ from services import mqtt_service, ws_manager
 from services.backup_service import run_backup, cleanup_old_backups
 from services.export_service import run_due_exports
 from services.webhook_service import dispatch_webhooks
+from api.activity import add_activity_log
 from api import (
     sensors_router,
     alerts_router,
@@ -27,7 +29,6 @@ from api import (
     auth_router,
     activity_router,
     reports_router,
-    audit_router,
     backups_router,
     anomalies_router,
     integrations_router
@@ -593,7 +594,6 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(activity_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
-app.include_router(audit_router, prefix="/api")
 app.include_router(backups_router, prefix="/api")
 app.include_router(anomalies_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")

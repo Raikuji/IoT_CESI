@@ -51,6 +51,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "aws-1-eu-central-1.pooler.supabase.com:3.71.225.44"
+      - "discord.com:162.159.136.232"
+      - "discordapp.com:162.159.136.232"
     dns:
       - 8.8.8.8
       - 1.1.1.1

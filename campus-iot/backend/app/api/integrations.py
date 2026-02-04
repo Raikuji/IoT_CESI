@@ -12,7 +12,7 @@ from schemas.integration import (
     WebhookCreate, WebhookUpdate, WebhookResponse,
     ExportConfigCreate, ExportConfigUpdate, ExportConfigResponse
 )
-from services.webhook_service import dispatch_webhooks
+from services.webhook_service import dispatch_webhooks, send_webhook
 from services.export_service import run_export
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
@@ -84,7 +84,7 @@ async def test_webhook(
         "event": "webhook.test",
         "message": "Test de webhook Campus IoT"
     }
-    dispatch_webhooks(db, "webhook.test", payload)
+    send_webhook(endpoint, "webhook.test", payload)
     return {"success": True}
 
 

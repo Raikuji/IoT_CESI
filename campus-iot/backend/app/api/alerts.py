@@ -2,6 +2,7 @@
 Alerts API endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import json
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -16,6 +17,7 @@ from schemas import (
 from api.auth import require_permission, require_any_permission
 from services.audit_service import log_audit
 from services.websocket_manager import ws_manager
+from api.activity import add_activity_log
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -179,7 +181,7 @@ def get_active_alerts(
 
 
 @router.post("/{alert_id}/ack", response_model=AlertResponse)
-def acknowledge_alert(
+async def acknowledge_alert(
     alert_id: int,
     current_user=Depends(require_permission("alerts")),
     db: Session = Depends(get_db),
@@ -207,11 +209,23 @@ def acknowledge_alert(
         after=alert_snapshot(alert),
         ip_address=request.client.host if request and request.client else None
     )
+    await add_activity_log(
+        db=db,
+        action="alert_resolved",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        details=json.dumps({
+            "alert_id": alert.id,
+            "sensor_id": alert.sensor_id,
+            "message": alert.message
+        }),
+        ip_address=request.client.host if request and request.client else None
+    )
     return alert
 
 
 @router.post("/ack-all")
-def acknowledge_all_alerts(
+async def acknowledge_all_alerts(
     current_user=Depends(require_permission("alerts")),
     db: Session = Depends(get_db),
     request: Request = None
@@ -240,6 +254,18 @@ def acknowledge_all_alerts(
             entity_id=alert.id,
             before=alert_snapshot(alert),
             after={"is_acknowledged": True, "acknowledged_at": now.isoformat()},
+            ip_address=request.client.host if request and request.client else None
+        )
+        await add_activity_log(
+            db=db,
+            action="alert_resolved",
+            user_id=current_user.id,
+            user_email=current_user.email,
+            details=json.dumps({
+                "alert_id": alert.id,
+                "sensor_id": alert.sensor_id,
+                "message": alert.message
+            }),
             ip_address=request.client.host if request and request.client else None
         )
     return {"acknowledged": result}

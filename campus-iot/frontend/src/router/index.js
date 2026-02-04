@@ -117,17 +117,6 @@ const routes = [
     }
   },
   {
-    path: '/audit',
-    name: 'Audit',
-    component: () => import('@/views/AuditView.vue'),
-    meta: { 
-      icon: 'mdi-clipboard-text-clock', 
-      title: 'Journal d\'audit', 
-      requiresAuth: true,
-      permission: 'audit'
-    }
-  },
-  {
     path: '/security',
     name: 'Security',
     component: () => import('@/views/SecurityView.vue'),
