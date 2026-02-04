@@ -9,10 +9,12 @@ from typing import Optional, List
 from datetime import datetime
 
 from db.database import get_db
-from models.settings import PlacedSensor
+from models.settings import PlacedSensor, SensorEnergySetting
 from models.user import User
 from api.auth import require_permission, require_any_permission
 from services.websocket_manager import ws_manager
+from services import mqtt_service
+import json
 from services.audit_service import log_audit
 
 router = APIRouter(prefix="/placed-sensors", tags=["Placed Sensors"])
@@ -56,6 +58,37 @@ class PlacedSensorResponse(BaseModel):
         from_attributes = True
 
 
+class SensorEnergySettingUpdate(BaseModel):
+    energy_enabled: Optional[bool] = None
+    refresh_interval: Optional[int] = None
+    refresh_interval_night: Optional[int] = None
+    disable_live: Optional[bool] = None
+    profile: Optional[str] = None
+    schedule_enabled: Optional[bool] = None
+    schedule_profile: Optional[str] = None
+    schedule_days: Optional[list] = None
+    schedule_start: Optional[str] = None
+    schedule_end: Optional[str] = None
+
+
+class SensorEnergySettingResponse(BaseModel):
+    placed_sensor_id: int
+    energy_enabled: bool
+    refresh_interval: int
+    refresh_interval_night: int
+    disable_live: bool
+    profile: str
+    schedule_enabled: bool
+    schedule_profile: str
+    schedule_days: list
+    schedule_start: str
+    schedule_end: str
+    updated_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 def sensor_to_response(sensor: PlacedSensor) -> PlacedSensorResponse:
     return PlacedSensorResponse(
         id=sensor.id,
@@ -92,6 +125,41 @@ def placed_sensor_snapshot(sensor: PlacedSensor) -> dict:
     }
 
 
+def energy_defaults() -> dict:
+    return {
+        "energy_enabled": False,
+        "refresh_interval": 120,
+        "refresh_interval_night": 300,
+        "disable_live": True,
+        "profile": "normal",
+        "schedule_enabled": False,
+        "schedule_profile": "eco",
+        "schedule_days": [],
+        "schedule_start": "22:00",
+        "schedule_end": "06:00"
+    }
+
+
+def energy_to_response(setting: Optional[SensorEnergySetting], placed_sensor_id: int) -> SensorEnergySettingResponse:
+    if not setting:
+        defaults = energy_defaults()
+        return SensorEnergySettingResponse(placed_sensor_id=placed_sensor_id, updated_at=None, **defaults)
+    return SensorEnergySettingResponse(
+        placed_sensor_id=placed_sensor_id,
+        energy_enabled=setting.energy_enabled,
+        refresh_interval=setting.refresh_interval,
+        refresh_interval_night=setting.refresh_interval_night,
+        disable_live=setting.disable_live,
+        profile=setting.profile,
+        schedule_enabled=setting.schedule_enabled,
+        schedule_profile=setting.schedule_profile,
+        schedule_days=setting.schedule_days or [],
+        schedule_start=setting.schedule_start,
+        schedule_end=setting.schedule_end,
+        updated_at=setting.updated_at.isoformat() if setting.updated_at else None
+    )
+
+
 @router.get("/", response_model=List[PlacedSensorResponse])
 async def get_all_placed_sensors(
     room_id: Optional[str] = None,
@@ -122,6 +190,115 @@ async def get_placed_sensor(
     if not sensor:
         raise HTTPException(status_code=404, detail="Sensor not found")
     return sensor_to_response(sensor)
+
+
+@router.get("/{sensor_id}/energy", response_model=SensorEnergySettingResponse)
+async def get_sensor_energy_setting(
+    sensor_id: int,
+    current_user: User = Depends(require_any_permission(["building", "dashboard"])),
+    db: Session = Depends(get_db)
+):
+    """Get energy settings for a placed sensor"""
+    sensor = db.query(PlacedSensor).filter(PlacedSensor.id == sensor_id).first()
+    if not sensor:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+
+    setting = db.query(SensorEnergySetting).filter(
+        SensorEnergySetting.placed_sensor_id == sensor_id
+    ).first()
+    return energy_to_response(setting, sensor_id)
+
+
+@router.put("/{sensor_id}/energy", response_model=SensorEnergySettingResponse)
+async def update_sensor_energy_setting(
+    sensor_id: int,
+    data: SensorEnergySettingUpdate,
+    current_user: User = Depends(require_any_permission(["building", "dashboard"])),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Update energy settings for a placed sensor"""
+    sensor = db.query(PlacedSensor).filter(PlacedSensor.id == sensor_id).first()
+    if not sensor:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+
+    setting = db.query(SensorEnergySetting).filter(
+        SensorEnergySetting.placed_sensor_id == sensor_id
+    ).first()
+
+    before = None
+    if not setting:
+        defaults = energy_defaults()
+        setting = SensorEnergySetting(placed_sensor_id=sensor_id, **defaults)
+        db.add(setting)
+    else:
+        before = {
+            "placed_sensor_id": setting.placed_sensor_id,
+            "energy_enabled": setting.energy_enabled,
+            "refresh_interval": setting.refresh_interval,
+            "refresh_interval_night": setting.refresh_interval_night,
+            "disable_live": setting.disable_live,
+            "profile": setting.profile,
+            "schedule_enabled": setting.schedule_enabled,
+            "schedule_profile": setting.schedule_profile,
+            "schedule_days": setting.schedule_days or [],
+            "schedule_start": setting.schedule_start,
+            "schedule_end": setting.schedule_end
+        }
+
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(setting, key, value)
+
+    db.commit()
+    db.refresh(setting)
+
+    response = energy_to_response(setting, sensor_id)
+
+    await ws_manager.broadcast({
+        "type": "sensor_energy_updated",
+        "sensor_id": sensor_id,
+        "settings": response.dict()
+    })
+
+    # Publish energy settings to MQTT (for devices/gateway)
+    mqtt_payload = {
+        "placed_sensor_id": sensor_id,
+        "room_id": sensor.room_id,
+        "sensor_type": sensor.sensor_type,
+        "energy": {
+            "enabled": response.energy_enabled,
+            "refresh_interval": response.refresh_interval,
+            "refresh_interval_night": response.refresh_interval_night,
+            "disable_live": response.disable_live,
+            "profile": response.profile,
+            "schedule_enabled": response.schedule_enabled,
+            "schedule_profile": response.schedule_profile,
+            "schedule_days": response.schedule_days,
+            "schedule_start": response.schedule_start,
+            "schedule_end": response.schedule_end
+        }
+    }
+    mqtt_service.publish(
+        f"controls/energy/{sensor.room_id}/{sensor.sensor_type}",
+        json.dumps(mqtt_payload),
+        qos=1,
+        retain=True
+    )
+
+    log_audit(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="update" if before else "create",
+        entity_type="sensor_energy_setting",
+        entity_id=setting.id,
+        before=before,
+        after=response.dict(),
+        ip_address=request.client.host if request and request.client else None
+    )
+
+    return response
 
 
 @router.post("/", response_model=PlacedSensorResponse, status_code=status.HTTP_201_CREATED)

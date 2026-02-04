@@ -1,795 +1,435 @@
 <template>
   <div>
-    <!-- Header -->
-    <div class="d-flex align-center justify-space-between mb-6 flex-wrap ga-3">
+    <div class="d-flex align-center justify-space-between mb-6 flex-wrap ga-3 page-header">
       <div>
         <h1 class="text-h4 font-weight-bold mb-1">Dashboard</h1>
         <p class="text-body-2 text-medium-emphasis">
           Bâtiment Orion - Campus CESI Nancy
         </p>
       </div>
-      <div class="d-flex align-center ga-3">
-        <v-chip color="primary" variant="tonal" size="large">
-          <v-icon start class="pulse">mdi-circle</v-icon>
-          Live
-        </v-chip>
-        <v-menu location="bottom end">
-          <template v-slot:activator="{ props }">
-            <v-btn v-bind="props" variant="tonal" color="primary" prepend-icon="mdi-view-grid">
-              Personnaliser
-            </v-btn>
-          </template>
-          <v-card min-width="260">
-            <v-card-title class="text-body-1 font-weight-bold">Widgets</v-card-title>
-            <v-divider />
-            <v-card-text class="py-2">
-              <v-checkbox
-                v-for="widget in widgetOptions"
-                :key="widget.key"
-                v-model="widget.enabled"
-                :label="widget.label"
-                density="compact"
-                hide-details
-                @update:modelValue="saveLayout"
-              />
-            </v-card-text>
-          </v-card>
-        </v-menu>
-      </div>
+      <v-chip color="primary" variant="tonal" size="large">
+        <v-icon start class="pulse">mdi-circle</v-icon>
+        Live
+      </v-chip>
     </div>
 
-    <!-- Room Filter -->
-    <v-card v-if="isWidgetEnabled('filter')" color="surface" class="mb-6">
-      <v-card-text class="pa-4">
-        <v-row align="center">
-          <v-col cols="12" sm="4" md="3">
-            <v-select
-              v-model="selectedFloor"
-              :items="floorOptions"
-              item-title="name"
-              item-value="id"
-              label="Étage"
-              variant="outlined"
-              density="compact"
-              hide-details
-              prepend-inner-icon="mdi-stairs"
-            />
-          </v-col>
-          <v-col cols="12" sm="5" md="4">
-            <v-select
-              v-model="selectedRoom"
-              :items="roomOptions"
-              item-title="label"
-              item-value="id"
-              label="Salle"
-              variant="outlined"
-              density="compact"
-              hide-details
-              prepend-inner-icon="mdi-door"
-              clearable
-              :disabled="!selectedFloor"
-            />
-          </v-col>
-          <v-col cols="12" sm="3" md="2">
-            <v-btn 
-              color="primary" 
-              variant="tonal" 
-              block 
-              @click="resetFilter"
-              :disabled="!selectedRoom"
-            >
-              <v-icon start>mdi-refresh</v-icon>
-              Tout voir
-            </v-btn>
-          </v-col>
-          <v-col cols="12" md="3">
-            <v-chip 
-              v-if="selectedRoomData" 
-              color="primary" 
+    <div v-if="floorGroups.length">
+      <v-card
+        v-for="floor in floorGroups"
+        :key="floor.id"
+        color="surface"
+        class="floor-card mb-6"
+      >
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-floor-plan</v-icon>
+          {{ floor.name }}
+        </v-card-title>
+        <v-card-text>
+          <div class="sensor-row">
+            <v-card
+              v-for="sensor in getFloorSensors(floor)"
+              :key="sensor.id"
+              class="sensor-tile"
               variant="flat"
-              size="large"
-              class="w-100 justify-center"
+              @click="openEnergyDialog(sensor, sensor.room)"
             >
-              <v-icon start>mdi-map-marker</v-icon>
-              {{ selectedRoomData.name }} ({{ selectedRoomData.id }})
-            </v-chip>
-            <v-chip 
-              v-else 
-              color="grey" 
-              variant="tonal"
-              size="large"
-              class="w-100 justify-center"
-            >
-              <v-icon start>mdi-home</v-icon>
-              Toutes les salles
-            </v-chip>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
-
-    <!-- Multi-room comparison -->
-    <v-card v-if="isWidgetEnabled('comparison')" color="surface" class="mb-6">
-      <v-card-title class="d-flex align-center">
-        <v-icon start>mdi-compare</v-icon>
-        Comparaison multi‑salles
-        <v-spacer />
-        <v-chip v-if="selectedCompareRooms.length" size="small" color="primary" variant="tonal">
-          {{ selectedCompareRooms.length }} salles
-        </v-chip>
-      </v-card-title>
-      <v-card-text>
-        <v-row align="center">
-          <v-col cols="12" md="6">
-            <v-select
-              v-model="selectedCompareRooms"
-              :items="compareRoomOptions"
-              label="Choisir des salles"
-              multiple
-              clearable
-              chips
-              variant="outlined"
-              density="compact"
-            />
-          </v-col>
-          <v-col cols="12" md="6" class="text-right">
-            <v-btn variant="text" @click="selectedCompareRooms = []">
-              Réinitialiser
-            </v-btn>
-          </v-col>
-        </v-row>
-
-        <v-row v-if="compareCards.length" class="mt-2">
-          <v-col v-for="card in compareCards" :key="card.roomId" cols="12" sm="6" lg="3">
-            <v-card class="h-100" variant="tonal">
-              <v-card-text>
-                <div class="d-flex align-center justify-space-between mb-3">
-                  <div>
-                    <div class="text-body-1 font-weight-semibold">{{ card.roomName }}</div>
-                    <div class="text-caption text-medium-emphasis">{{ card.roomId }}</div>
+              <div class="sensor-tile-content">
+                <v-avatar :color="getSensorColor(sensor.type)" variant="tonal" size="44">
+                  <v-icon size="20">{{ getSensorIcon(sensor.type) }}</v-icon>
+                </v-avatar>
+                <div class="sensor-tile-body">
+                  <div class="sensor-tile-value" :style="{ color: getSensorValueColor(sensor) }">
+                    {{ formatValue(sensor.value, sensor.type) }}
+                    <span class="text-caption text-medium-emphasis">{{ getSensorUnit(sensor.type) }}</span>
                   </div>
-                  <v-chip size="x-small" color="primary" variant="tonal">
-                    {{ card.status }}
-                  </v-chip>
-                </div>
-
-                <div class="mb-3">
-                  <div class="text-caption">Température</div>
-                  <div class="text-body-1 font-weight-bold" :style="{ color: getTemperatureColor(card.temperature) }">
-                    {{ formatValue(card.temperature, 1) }}°C
+                  <div class="text-caption text-medium-emphasis">
+                    {{ getSensorLabel(sensor.type) }}
                   </div>
-                  <v-progress-linear
-                    :model-value="getTemperaturePercent(card.temperature)"
-                    :color="getTemperatureColor(card.temperature)"
-                    height="4"
-                    rounded
-                  />
-                </div>
-
-                <div class="mb-3">
-                  <div class="text-caption">Humidité</div>
-                  <div class="text-body-1 font-weight-bold" :style="{ color: getHumidityColor(card.humidity) }">
-                    {{ formatValue(card.humidity, 0) }}%
-                  </div>
-                  <v-progress-linear
-                    :model-value="card.humidity || 0"
-                    :color="getHumidityColor(card.humidity)"
-                    height="4"
-                    rounded
-                  />
-                </div>
-
-                <div>
-                  <div class="text-caption">Présence</div>
-                  <div class="text-body-1 font-weight-bold" :class="card.presence ? 'text-success' : 'text-grey'">
-                    {{ card.presence ? 'Oui' : 'Non' }}
+                  <div class="mt-2 d-flex align-center ga-1">
+                    <v-chip
+                      v-if="isEcoActive(sensor.id)"
+                      size="x-small"
+                      color="success"
+                      variant="tonal"
+                    >
+                      Éco actif
+                    </v-chip>
+                    <v-chip size="x-small" variant="tonal">
+                      {{ sensor.name || sensor.type }}
+                    </v-chip>
                   </div>
                 </div>
-              </v-card-text>
+                <span :class="['status-dot', getSensorStatus(sensor)]"></span>
+              </div>
             </v-card>
-          </v-col>
-        </v-row>
+          </div>
+        </v-card-text>
+      </v-card>
+    </div>
 
-        <div v-else class="text-center py-6 text-medium-emphasis">
-          <v-icon size="48" class="mb-2">mdi-compare-off</v-icon>
-          <p class="text-body-2">Sélectionne des salles pour comparer</p>
-        </div>
-      </v-card-text>
+    <v-card v-else class="text-center pa-8" color="surface">
+      <v-icon size="64" color="grey">mdi-office-building-outline</v-icon>
+      <h3 class="mt-4 text-h6">Aucun capteur affiché</h3>
+      <p class="text-body-2 text-medium-emphasis mt-2">
+        Les salles apparaîtront ici dès qu'elles contiennent des capteurs placés.
+      </p>
     </v-card>
 
-    <!-- Sensor Cards Grid -->
-    <v-row v-if="isWidgetEnabled('cards')">
-      <!-- Temperature -->
-      <v-col cols="12" sm="6" lg="4">
-        <v-card 
-          class="glow-card h-100 sensor-card"
-          color="surface"
-          :style="getTemperatureGradient(roomTemperature?.latest_value)"
-        >
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar :color="getTemperatureColor(roomTemperature?.latest_value)" variant="tonal" size="48" class="sensor-icon">
-                <v-icon size="24">mdi-thermometer</v-icon>
-              </v-avatar>
-              <span :class="['status-dot', getStatus(roomTemperature)]"></span>
-            </div>
-            <div class="sensor-value temperature mb-2" :style="{ color: getTemperatureColor(roomTemperature?.latest_value) }">
-              {{ formatValue(roomTemperature?.latest_value, 1) }}
-              <span class="text-body-1 text-medium-emphasis">°C</span>
-            </div>
-            <div class="text-body-2 text-medium-emphasis">Température</div>
-            <v-progress-linear 
-              :model-value="getTemperaturePercent(roomTemperature?.latest_value)" 
-              :color="getTemperatureColor(roomTemperature?.latest_value)"
-              height="4"
-              rounded
-              class="mt-3"
-            />
-            <v-chip 
-              v-if="roomTemperature?.location" 
-              size="x-small" 
-              :color="getTemperatureColor(roomTemperature?.latest_value)" 
-              variant="tonal" 
-              class="mt-2"
-            >
-              <v-icon start size="12">mdi-map-marker</v-icon>
-              {{ roomTemperature.location }}
-            </v-chip>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <!-- Humidity -->
-      <v-col cols="12" sm="6" lg="4">
-        <v-card 
-          class="glow-card h-100 sensor-card"
-          color="surface"
-          :style="getHumidityGradient(roomHumidity?.latest_value)"
-        >
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar :color="getHumidityColor(roomHumidity?.latest_value)" variant="tonal" size="48" class="sensor-icon">
-                <v-icon size="24">mdi-water-percent</v-icon>
-              </v-avatar>
-              <span :class="['status-dot', getStatus(roomHumidity)]"></span>
-            </div>
-            <div class="sensor-value humidity mb-2" :style="{ color: getHumidityColor(roomHumidity?.latest_value) }">
-              {{ formatValue(roomHumidity?.latest_value, 0) }}
-              <span class="text-body-1 text-medium-emphasis">%</span>
-            </div>
-            <div class="text-body-2 text-medium-emphasis">Humidité</div>
-            <v-progress-linear 
-              :model-value="roomHumidity?.latest_value || 0" 
-              :color="getHumidityColor(roomHumidity?.latest_value)"
-              height="4"
-              rounded
-              class="mt-3"
-            />
-            <v-chip 
-              v-if="roomHumidity?.location" 
-              size="x-small" 
-              :color="getHumidityColor(roomHumidity?.latest_value)" 
-              variant="tonal" 
-              class="mt-2"
-            >
-              <v-icon start size="12">mdi-map-marker</v-icon>
-              {{ roomHumidity.location }}
-            </v-chip>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <!-- Presence -->
-      <v-col cols="12" sm="6" lg="4">
-        <v-card 
-          class="glow-card h-100 sensor-card"
-          color="surface"
-          :style="getPresenceGradient(roomPresence?.latest_value)"
-        >
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center justify-space-between mb-4">
-              <v-avatar :color="roomPresence?.latest_value ? 'success' : 'grey'" variant="tonal" size="48" class="sensor-icon">
-                <v-icon size="24">mdi-motion-sensor</v-icon>
-              </v-avatar>
-              <span :class="['status-dot', getStatus(roomPresence)]"></span>
-            </div>
-            <div class="sensor-value presence mb-2" :class="roomPresence?.latest_value ? 'text-success' : 'text-grey'">
-              {{ roomPresence?.latest_value ? 'Oui' : 'Non' }}
-            </div>
-            <div class="text-body-2 text-medium-emphasis">Présence détectée</div>
-            <v-chip 
-              v-if="roomPresence?.location" 
-              size="x-small" 
-              :color="roomPresence?.latest_value ? 'success' : 'grey'" 
-              variant="tonal" 
-              class="mt-3"
-            >
-              <v-icon start size="12">mdi-map-marker</v-icon>
-              {{ roomPresence.location }}
-            </v-chip>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Charts Row -->
-    <v-row v-if="isWidgetEnabled('chart') || isWidgetEnabled('alerts')" class="mt-4">
-      <!-- Temperature Chart -->
-      <v-col v-if="isWidgetEnabled('chart')" cols="12" lg="8">
-        <v-card color="surface">
+    <v-row class="mb-6">
+      <v-col cols="12" lg="8">
+        <v-card color="surface" class="h-100">
           <v-card-title class="d-flex align-center">
             <v-icon start>mdi-chart-line</v-icon>
             Évolution température
-            <v-spacer></v-spacer>
-            <v-btn-toggle v-model="chartPeriod" mandatory density="compact" variant="outlined">
-              <v-btn value="1h" size="small">1H</v-btn>
-              <v-btn value="6h" size="small">6H</v-btn>
-              <v-btn value="24h" size="small">24H</v-btn>
+            <v-spacer />
+            <v-btn-toggle v-model="chartPeriod" density="compact" variant="tonal" color="primary">
+              <v-btn value="1h">1h</v-btn>
+              <v-btn value="6h">6h</v-btn>
+              <v-btn value="24h">24h</v-btn>
             </v-btn-toggle>
           </v-card-title>
           <v-card-text>
-            <div class="chart-container">
-              <apexchart
-                v-if="chartData.length > 0"
-                type="area"
-                height="300"
-                :options="chartOptions"
-                :series="chartSeries"
-              ></apexchart>
-              <div v-else class="d-flex flex-column align-center justify-center" style="height: 300px">
-                <v-icon size="48" color="grey" class="mb-2">mdi-chart-line-variant</v-icon>
-                <p class="text-body-2 text-medium-emphasis">Aucune donnée disponible</p>
-                <p class="text-caption text-medium-emphasis">Les données apparaîtront quand les capteurs enverront des mesures</p>
-              </div>
-            </div>
+            <apexchart
+              type="area"
+              height="300"
+              :options="chartOptions"
+              :series="chartSeries"
+            ></apexchart>
           </v-card-text>
         </v-card>
       </v-col>
-
-      <!-- Alerts Summary -->
-      <v-col v-if="isWidgetEnabled('alerts')" cols="12" lg="4">
+      <v-col cols="12" lg="4">
         <v-card color="surface" class="h-100">
           <v-card-title class="d-flex align-center">
             <v-icon start>mdi-bell-alert</v-icon>
             Alertes actives
-            <v-spacer></v-spacer>
-            <v-chip :color="alertCount > 0 ? 'error' : 'success'" size="small">
+            <v-spacer />
+            <v-chip size="small" color="error" variant="tonal">
               {{ alertCount }}
             </v-chip>
           </v-card-title>
           <v-card-text>
-            <v-list v-if="recentAlerts.length" bg-color="transparent" density="compact">
+            <v-list bg-color="transparent" density="compact">
               <v-list-item
                 v-for="alert in recentAlerts"
                 :key="alert.id"
-                :class="['alert-' + alert.severity, 'mb-2 rounded-lg']"
+                class="mb-2 rounded-lg"
               >
                 <template v-slot:prepend>
-                  <v-icon :color="getSeverityColor(alert.severity)">
-                    {{ getSeverityIcon(alert.severity) }}
-                  </v-icon>
+                  <v-avatar :color="getSeverityColor(alert.severity)" variant="tonal">
+                    <v-icon>{{ getSeverityIcon(alert.severity) }}</v-icon>
+                  </v-avatar>
                 </template>
                 <v-list-item-title>{{ alert.message }}</v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ formatDate(alert.created_at) }}
-                </v-list-item-subtitle>
+                <v-list-item-subtitle>{{ formatDate(alert.created_at) }}</v-list-item-subtitle>
               </v-list-item>
             </v-list>
-            <div v-else class="text-center py-8 text-medium-emphasis">
-              <v-icon size="48" class="mb-2">mdi-check-circle-outline</v-icon>
-              <p>Aucune alerte active</p>
+            <div v-if="alertCount === 0" class="text-center py-6 text-medium-emphasis">
+              <v-icon size="48" class="mb-2">mdi-check-circle</v-icon>
+              <p class="text-body-2">Aucune alerte active</p>
             </div>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <!-- System Status Row -->
-    <v-row class="mt-4">
-      <v-col cols="12">
-        <v-card color="surface">
-          <v-card-title>
-            <v-icon start>mdi-server</v-icon>
-            État du système
-          </v-card-title>
-          <v-card-text>
-            <v-row>
-              <v-col cols="6" sm="3">
-                <div class="text-center">
-                  <div class="text-h4 font-weight-bold text-primary">
-                    {{ sensors.length }}
-                  </div>
-                  <div class="text-body-2 text-medium-emphasis">Capteurs total</div>
+    <v-dialog v-model="energyDialog" max-width="600">
+      <v-card color="surface">
+        <v-card-title class="d-flex align-center">
+          <v-icon start>mdi-power-settings</v-icon>
+          Économie d'énergie
+          <v-spacer />
+          <v-btn icon variant="text" @click="energyDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-card-text v-if="selectedSensor">
+          <div class="mb-4">
+            <div class="text-body-1 font-weight-semibold">
+              {{ selectedSensor.name || getSensorLabel(selectedSensor.type) }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ selectedRoom?.name }} — {{ selectedRoom?.id }}
+            </div>
+          </div>
+
+          <v-list bg-color="transparent">
+            <v-list-item>
+              <v-list-item-title>Profil</v-list-item-title>
+              <template v-slot:append>
+                <v-select
+                  v-model="energyForm.profile"
+                  :items="energyProfileOptions"
+                  density="compact"
+                  style="max-width: 160px"
+                  @update:modelValue="applyEnergyProfile"
+                ></v-select>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Mode éco</v-list-item-title>
+              <template v-slot:append>
+                <v-switch v-model="energyForm.energy_enabled" color="primary" hide-details></v-switch>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Désactiver le temps réel</v-list-item-title>
+              <template v-slot:append>
+                <v-switch v-model="energyForm.disable_live" color="primary" hide-details></v-switch>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Intervalle rafraîchissement (sec)</v-list-item-title>
+              <template v-slot:append>
+                <v-text-field
+                  v-model.number="energyForm.refresh_interval"
+                  type="number"
+                  density="compact"
+                  style="max-width: 120px"
+                ></v-text-field>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Intervalle nuit (sec)</v-list-item-title>
+              <template v-slot:append>
+                <v-text-field
+                  v-model.number="energyForm.refresh_interval_night"
+                  type="number"
+                  density="compact"
+                  style="max-width: 120px"
+                ></v-text-field>
+              </template>
+            </v-list-item>
+          </v-list>
+
+          <v-divider class="my-4"></v-divider>
+
+          <v-list bg-color="transparent">
+            <v-list-item>
+              <v-list-item-title>Planning automatique</v-list-item-title>
+              <template v-slot:append>
+                <v-switch v-model="energyForm.schedule_enabled" color="primary" hide-details></v-switch>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Profil planifié</v-list-item-title>
+              <template v-slot:append>
+                <v-select
+                  v-model="energyForm.schedule_profile"
+                  :items="energyProfileOptions"
+                  density="compact"
+                  style="max-width: 160px"
+                ></v-select>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Jours actifs</v-list-item-title>
+              <template v-slot:append>
+                <v-select
+                  v-model="energyForm.schedule_days"
+                  :items="dayOptions"
+                  multiple
+                  density="compact"
+                  style="max-width: 220px"
+                ></v-select>
+              </template>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>Plage horaire</v-list-item-title>
+              <template v-slot:append>
+                <div class="d-flex ga-2">
+                  <v-text-field
+                    v-model="energyForm.schedule_start"
+                    type="time"
+                    density="compact"
+                    style="max-width: 120px"
+                  ></v-text-field>
+                  <v-text-field
+                    v-model="energyForm.schedule_end"
+                    type="time"
+                    density="compact"
+                    style="max-width: 120px"
+                  ></v-text-field>
                 </div>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <div class="text-center">
-                  <div class="text-h4 font-weight-bold text-success">
-                    {{ onlineSensors.length }}
-                  </div>
-                  <div class="text-body-2 text-medium-emphasis">En ligne</div>
-                </div>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <div class="text-center">
-                  <div class="text-h4 font-weight-bold text-warning">
-                    {{ alertCount }}
-                  </div>
-                  <div class="text-body-2 text-medium-emphasis">Alertes</div>
-                </div>
-              </v-col>
-              <v-col cols="6" sm="3">
-                <div class="text-center">
-                  <div class="text-h4 font-weight-bold text-info">
-                    {{ heatingValue }}%
-                  </div>
-                  <div class="text-body-2 text-medium-emphasis">Chauffage</div>
-                </div>
-              </v-col>
-            </v-row>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn variant="text" @click="energyDialog = false">Annuler</v-btn>
+          <v-btn color="primary" @click="saveEnergySettings">Enregistrer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useSensorsStore } from '@/stores/sensors'
-import { useAlertsStore } from '@/stores/alerts'
 import { useBuildingStore } from '@/stores/building'
-import { useAuthStore } from '@/stores/auth'
+import { useAlertsStore } from '@/stores/alerts'
 import VueApexCharts from 'vue3-apexcharts'
 
 const apexchart = VueApexCharts
 
-// Stores
-const sensorsStore = useSensorsStore()
-const alertsStore = useAlertsStore()
 const buildingStore = useBuildingStore()
-const authStore = useAuthStore()
+const alertsStore = useAlertsStore()
 
-const { sensors, temperature, humidity, presence, onlineSensors } = storeToRefs(sensorsStore)
-const { activeAlerts } = storeToRefs(alertsStore)
 const { floors, rooms, sensors: buildingSensors } = storeToRefs(buildingStore)
-const { preferences } = storeToRefs(authStore)
+const { activeAlerts } = storeToRefs(alertsStore)
 
-// Room filter
-const selectedFloor = ref('all')
+const energyDialog = ref(false)
+const selectedSensor = ref(null)
 const selectedRoom = ref(null)
-const selectedCompareRooms = ref([])
+const energyForm = ref(buildingStore.getEnergySetting(null))
 
-// Dashboard layout (user preferences)
-const defaultLayout = {
-  widgets: {
-    filter: true,
-    comparison: true,
-    cards: true,
-    chart: true,
-    alerts: true
-  }
-}
+const energyProfileOptions = [
+  { title: 'Normal', value: 'normal' },
+  { title: 'Éco', value: 'eco' },
+  { title: 'Nuit', value: 'night' }
+]
 
-const layout = ref({ ...defaultLayout })
+const dayOptions = [
+  { title: 'Lun', value: 0 },
+  { title: 'Mar', value: 1 },
+  { title: 'Mer', value: 2 },
+  { title: 'Jeu', value: 3 },
+  { title: 'Ven', value: 4 },
+  { title: 'Sam', value: 5 },
+  { title: 'Dim', value: 6 }
+]
 
-const widgetOptions = ref([])
+const sensorTypeOrder = ['temperature', 'humidity', 'co2', 'presence', 'pressure', 'light']
 
-function syncWidgetOptions() {
-  const widgets = layout.value.widgets || {}
-  widgetOptions.value = [
-    { key: 'filter', label: 'Filtre de salle', enabled: widgets.filter !== false },
-    { key: 'comparison', label: 'Comparaison multi‑salles', enabled: widgets.comparison !== false },
-    { key: 'cards', label: 'Cartes capteurs', enabled: widgets.cards !== false },
-    { key: 'chart', label: 'Courbe température', enabled: widgets.chart !== false },
-    { key: 'alerts', label: 'Alertes actives', enabled: widgets.alerts !== false }
-  ]
-}
-
-function isWidgetEnabled(key) {
-  return layout.value.widgets?.[key] !== false
-}
-
-async function saveLayout() {
-  const updated = {
-    ...layout.value,
-    widgets: widgetOptions.value.reduce((acc, w) => {
-      acc[w.key] = !!w.enabled
-      return acc
-    }, {})
-  }
-  layout.value = updated
-  await authStore.updatePreferences({ dashboard_layout: updated })
-}
-
-// Floor options with "All" option
-const floorOptions = computed(() => [
-  { id: 'all', name: 'Tous les étages' },
-  ...floors.value
-])
-
-// Room options based on selected floor
-const roomOptions = computed(() => {
-  if (!selectedFloor.value || selectedFloor.value === 'all') {
-    return rooms.value
-      .filter(r => r.type !== 'utility' && r.type !== 'common')
-      .map(r => ({ id: r.id, label: `${r.name} (${r.id})` }))
-  }
-  return rooms.value
-    .filter(r => r.floor === selectedFloor.value && r.type !== 'utility' && r.type !== 'common')
-    .map(r => ({ id: r.id, label: `${r.name} (${r.id})` }))
-})
-
-const compareRoomOptions = computed(() => {
-  return rooms.value
-    .filter(r => r.type !== 'utility' && r.type !== 'common')
-    .map(r => ({ title: `${r.name} (${r.id})`, value: r.id }))
-})
-
-const compareCards = computed(() => {
-  if (!selectedCompareRooms.value.length) return []
-  return selectedCompareRooms.value.slice(0, 6).map(roomId => {
-    const room = rooms.value.find(r => r.id === roomId)
-    const temp = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'temperature')
-    const hum = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'humidity')
-    const pres = buildingSensors.value.find(s => s.roomId === roomId && s.type === 'presence')
-
-    return {
-      roomId,
-      roomName: room?.name || roomId,
-      temperature: temp?.value ?? null,
-      humidity: hum?.value ?? null,
-      presence: Boolean(pres?.value),
-      status: temp?.status || hum?.status || pres?.status || 'offline'
-    }
-  })
-})
-
-// Selected room data
-const selectedRoomData = computed(() => {
-  if (!selectedRoom.value) return null
-  return rooms.value.find(r => r.id === selectedRoom.value)
-})
-
-// Filtered sensors based on selected room
-const filteredBuildingSensors = computed(() => {
-  if (!selectedRoom.value) return buildingSensors.value
-  return buildingSensors.value.filter(s => s.roomId === selectedRoom.value)
-})
-
-// Get aggregated sensor data (from API or building store)
-const roomTemperature = computed(() => {
-  // If a specific room is selected, get data from building sensors
-  if (selectedRoom.value) {
-    const sensor = filteredBuildingSensors.value.find(s => s.type === 'temperature')
-    if (sensor) {
-      return { 
-        latest_value: sensor.value, 
-        location: selectedRoomData.value?.name,
-        status: sensor.status 
-      }
-    }
-    return { latest_value: null, location: selectedRoomData.value?.name, status: 'offline' }
-  }
-  
-  // No room selected - show global data from API or first available building sensor
-  if (temperature.value?.latest_value !== undefined && temperature.value?.latest_value !== null) {
-    return temperature.value
-  }
-  
-  // Fallback to first temperature sensor in building
-  const firstTempSensor = buildingSensors.value.find(s => s.type === 'temperature' && s.value !== null)
-  if (firstTempSensor) {
-    const room = rooms.value.find(r => r.id === firstTempSensor.roomId)
-    return {
-      latest_value: firstTempSensor.value,
-      location: room?.name || firstTempSensor.roomId,
-      status: firstTempSensor.status || 'ok'
-    }
-  }
-  
-  return { latest_value: null, location: null, status: 'offline' }
-})
-
-const roomHumidity = computed(() => {
-  if (selectedRoom.value) {
-    const sensor = filteredBuildingSensors.value.find(s => s.type === 'humidity')
-    if (sensor) {
-      return { 
-        latest_value: sensor.value, 
-        location: selectedRoomData.value?.name,
-        status: sensor.status 
-      }
-    }
-    return { latest_value: null, location: selectedRoomData.value?.name, status: 'offline' }
-  }
-  
-  if (humidity.value?.latest_value !== undefined && humidity.value?.latest_value !== null) {
-    return humidity.value
-  }
-  
-  const firstHumSensor = buildingSensors.value.find(s => s.type === 'humidity' && s.value !== null)
-  if (firstHumSensor) {
-    const room = rooms.value.find(r => r.id === firstHumSensor.roomId)
-    return {
-      latest_value: firstHumSensor.value,
-      location: room?.name || firstHumSensor.roomId,
-      status: firstHumSensor.status || 'ok'
-    }
-  }
-  
-  return { latest_value: null, location: null, status: 'offline' }
-})
-
-const roomPresence = computed(() => {
-  if (selectedRoom.value) {
-    const sensor = filteredBuildingSensors.value.find(s => s.type === 'presence')
-    if (sensor) {
-      return { 
-        latest_value: sensor.value, 
-        location: selectedRoomData.value?.name,
-        status: sensor.status 
-      }
-    }
-    return { latest_value: null, location: selectedRoomData.value?.name, status: 'offline' }
-  }
-  
-  if (presence.value?.latest_value !== undefined && presence.value?.latest_value !== null) {
-    return presence.value
-  }
-  
-  const firstPresSensor = buildingSensors.value.find(s => s.type === 'presence' && s.value !== null)
-  if (firstPresSensor) {
-    const room = rooms.value.find(r => r.id === firstPresSensor.roomId)
-    return {
-      latest_value: firstPresSensor.value,
-      location: room?.name || firstPresSensor.roomId,
-      status: firstPresSensor.status || 'ok'
-    }
-  }
-  
-  return { latest_value: null, location: null, status: 'offline' }
-})
-
-// Reset filter
-function resetFilter() {
-  selectedRoom.value = null
-}
-
-// Watch floor change to reset room
-watch(selectedFloor, () => {
-  selectedRoom.value = null
-})
-
-// Chart
 const chartPeriod = ref('6h')
 const chartData = ref([])
-const heatingValue = ref(45) // Mock value
 
 const alertCount = computed(() => activeAlerts.value.length)
 const recentAlerts = computed(() => activeAlerts.value.slice(0, 5))
 
-// Chart options
-const chartOptions = computed(() => ({
-  chart: {
-    type: 'area',
-    toolbar: { show: false },
-    background: 'transparent',
-    animations: {
-      enabled: true,
-      easing: 'easeinout',
-      speed: 800
-    }
-  },
-  colors: ['#ff6b6b'],
-  fill: {
-    type: 'gradient',
-    gradient: {
-      shadeIntensity: 1,
-      opacityFrom: 0.4,
-      opacityTo: 0.1,
-      stops: [0, 90, 100]
-    }
-  },
-  stroke: {
-    curve: 'smooth',
-    width: 3
-  },
-  grid: {
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    strokeDashArray: 4
-  },
-  xaxis: {
-    type: 'datetime',
-    labels: {
-      style: { colors: '#888' }
-    }
-  },
-  yaxis: {
-    labels: {
-      style: { colors: '#888' },
-      formatter: (val) => `${val.toFixed(1)}°C`
-    }
-  },
-  tooltip: {
-    theme: 'dark',
-    x: { format: 'HH:mm:ss' }
-  },
-  dataLabels: { enabled: false }
-}))
 
-const chartSeries = computed(() => [{
-  name: 'Température',
-  data: chartData.value
-}])
+const floorGroups = computed(() => {
+  const roomsById = new Map(rooms.value.map(r => [r.id, r]))
+  const sensorsByRoom = {}
+  buildingSensors.value.forEach(sensor => {
+    if (!sensor.roomId) return
+    if (!roomsById.has(sensor.roomId)) return
+    if (!sensorsByRoom[sensor.roomId]) sensorsByRoom[sensor.roomId] = []
+    sensorsByRoom[sensor.roomId].push(sensor)
+  })
 
-// Color gradient helpers
-function getTemperatureColor(value) {
-  if (value === null || value === undefined) return '#888888'
-  if (value < 18) return '#3b82f6' // Cold - blue
-  if (value < 20) return '#22c55e' // Cool - green
-  if (value <= 23) return '#22c55e' // Optimal - green
-  if (value <= 26) return '#f59e0b' // Warm - orange
-  return '#ef4444' // Hot - red
+  return [...floors.value]
+    .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
+    .map(floor => {
+      const floorRooms = rooms.value
+        .filter(r => r.floor === floor.id)
+        .filter(r => (sensorsByRoom[r.id] || []).length)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(r => ({
+          ...r,
+          sensors: (sensorsByRoom[r.id] || []).sort((a, b) => {
+            const aIdx = sensorTypeOrder.indexOf(a.type)
+            const bIdx = sensorTypeOrder.indexOf(b.type)
+            return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+          })
+        }))
+
+      return {
+        ...floor,
+        rooms: floorRooms
+      }
+    })
+    .filter(floor => floor.rooms.length)
+})
+
+function getFloorSensors(floor) {
+  if (!floor?.rooms?.length) return []
+  return floor.rooms
+    .flatMap(room => room.sensors.map(sensor => ({ ...sensor, room })))
+    .sort((a, b) => {
+      const aIdx = sensorTypeOrder.indexOf(a.type)
+      const bIdx = sensorTypeOrder.indexOf(b.type)
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx)
+    })
 }
 
-function getTemperatureGradient(value) {
-  const color = getTemperatureColor(value)
-  return {
-    borderLeft: `3px solid ${color}`,
-    boxShadow: `0 4px 20px ${color}22`
+watch(buildingSensors, (sensors) => {
+  const ids = sensors.map(s => s.id)
+  buildingStore.ensureEnergySettings(ids)
+}, { immediate: true })
+
+watch(chartPeriod, () => {
+  generateChartData()
+})
+
+function getSensorIcon(type) {
+  const icons = {
+    temperature: 'mdi-thermometer',
+    humidity: 'mdi-water-percent',
+    pressure: 'mdi-gauge',
+    presence: 'mdi-motion-sensor',
+    co2: 'mdi-molecule-co2',
+    light: 'mdi-lightbulb'
   }
+  return icons[type] || 'mdi-chip'
 }
 
-function getTemperaturePercent(value) {
-  if (value === null || value === undefined) return 0
-  // Map 15-30°C to 0-100%
-  return Math.min(100, Math.max(0, ((value - 15) / 15) * 100))
-}
-
-function getHumidityColor(value) {
-  if (value === null || value === undefined) return '#888888'
-  if (value < 30) return '#f59e0b' // Too dry - orange
-  if (value < 40) return '#22c55e' // Slightly dry - green
-  if (value <= 60) return '#22c55e' // Optimal - green
-  if (value <= 70) return '#3b82f6' // Humid - blue
-  return '#ef4444' // Too humid - red
-}
-
-function getHumidityGradient(value) {
-  const color = getHumidityColor(value)
-  return {
-    borderLeft: `3px solid ${color}`,
-    boxShadow: `0 4px 20px ${color}22`
+function getSensorColor(type) {
+  const colors = {
+    temperature: 'error',
+    humidity: 'info',
+    pressure: 'secondary',
+    presence: 'success',
+    co2: 'warning',
+    light: 'amber'
   }
+  return colors[type] || 'grey'
 }
 
-function getPresenceGradient(value) {
-  const color = value ? '#22c55e' : '#6b7280'
-  return {
-    borderLeft: `3px solid ${color}`,
-    boxShadow: value ? `0 4px 20px ${color}22` : 'none'
+function getSensorLabel(type) {
+  const labels = {
+    temperature: 'Température',
+    humidity: 'Humidité',
+    pressure: 'Pression',
+    presence: 'Présence',
+    co2: 'CO2',
+    light: 'Luminosité'
   }
+  return labels[type] || 'Capteur'
 }
 
-// Helpers
-function formatValue(value, decimals = 1) {
+function getSensorUnit(type) {
+  const units = {
+    temperature: '°C',
+    humidity: '%',
+    pressure: 'hPa',
+    presence: '',
+    co2: 'ppm',
+    light: 'lx'
+  }
+  return units[type] || ''
+}
+
+function getSensorStatus(sensor) {
+  return sensor?.status || 'offline'
+}
+
+
+function getSensorValueColor(sensor) {
+  if (sensor?.type === 'presence') return sensor.value ? '#22c55e' : '#6b7280'
+  return '#22c55e'
+}
+
+function formatValue(value, type) {
   if (value === null || value === undefined) return '--'
-  return Number(value).toFixed(decimals)
-}
-
-function getStatus(sensor) {
-  if (!sensor?.status) return 'offline'
-  return sensor.status
+  if (type === 'presence') return value ? 'Oui' : 'Non'
+  return Number(value).toFixed(1)
 }
 
 function getSeverityColor(severity) {
-  const colors = {
-    danger: 'error',
-    warning: 'warning',
-    info: 'info'
-  }
+  const colors = { danger: 'error', warning: 'warning', info: 'info' }
   return colors[severity] || 'grey'
 }
 
@@ -812,62 +452,212 @@ function formatDate(dateStr) {
   })
 }
 
-// Generate chart data based on selected period
 function generateChartData() {
   const now = Date.now()
   const data = []
-  
-  // Calculate interval and points based on period
-  let totalMinutes, intervalMinutes
+  let totalMinutes
+  let intervalMinutes
   switch (chartPeriod.value) {
     case '1h':
       totalMinutes = 60
-      intervalMinutes = 1  // 1 point per minute = 60 points
+      intervalMinutes = 1
       break
     case '6h':
       totalMinutes = 360
-      intervalMinutes = 5  // 1 point per 5 minutes = 72 points
+      intervalMinutes = 5
       break
     case '24h':
       totalMinutes = 1440
-      intervalMinutes = 15 // 1 point per 15 minutes = 96 points
+      intervalMinutes = 15
       break
     default:
       totalMinutes = 360
       intervalMinutes = 5
   }
-  
   const points = Math.floor(totalMinutes / intervalMinutes)
-  
   for (let i = points; i >= 0; i--) {
     data.push({
       x: now - i * intervalMinutes * 60000,
-      y: 21 + Math.random() * 3 // Random temp between 21-24
+      y: 21 + Math.random() * 3
     })
   }
-  
   chartData.value = data
 }
 
-// Watch period changes to regenerate chart
-watch(chartPeriod, () => {
-  generateChartData()
-})
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    toolbar: { show: false },
+    background: 'transparent',
+    animations: { enabled: true, easing: 'easeinout', speed: 800 }
+  },
+  colors: ['#ff6b6b'],
+  fill: {
+    type: 'gradient',
+    gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1, stops: [0, 90, 100] }
+  },
+  stroke: { curve: 'smooth', width: 3 },
+  grid: { borderColor: 'rgba(255, 255, 255, 0.1)', strokeDashArray: 4 },
+  xaxis: { type: 'datetime', labels: { style: { colors: '#888' } } },
+  yaxis: {
+    labels: {
+      style: { colors: '#888' },
+      formatter: (val) => `${val.toFixed(1)}°C`
+    }
+  },
+  tooltip: { theme: 'dark', x: { format: 'HH:mm:ss' } },
+  dataLabels: { enabled: false }
+}))
 
-watch(() => preferences.value?.dashboard_layout, (newLayout) => {
-  if (newLayout) {
-    layout.value = newLayout
-    syncWidgetOptions()
+const chartSeries = computed(() => [{ name: 'Température', data: chartData.value }])
+
+function isEcoActive(sensorId) {
+  const setting = buildingStore.getEnergySetting(sensorId)
+  return Boolean(setting.energy_enabled || setting.schedule_enabled)
+}
+
+async function openEnergyDialog(sensor, room) {
+  selectedSensor.value = sensor
+  selectedRoom.value = room
+  const setting = await buildingStore.fetchSensorEnergySetting(sensor.id)
+  energyForm.value = { ...setting }
+  energyDialog.value = true
+}
+
+function applyEnergyProfile(profile) {
+  const presets = {
+    normal: { energy_enabled: false, refresh_interval: 60, disable_live: false },
+    eco: { energy_enabled: true, refresh_interval: 120, disable_live: true },
+    night: { energy_enabled: true, refresh_interval: 300, disable_live: true }
   }
-})
+  const preset = presets[profile] || presets.normal
+  energyForm.value = {
+    ...energyForm.value,
+    profile,
+    energy_enabled: preset.energy_enabled,
+    refresh_interval: preset.refresh_interval,
+    disable_live: preset.disable_live
+  }
+}
+
+async function saveEnergySettings() {
+  if (!selectedSensor.value) return
+  const payload = {
+    energy_enabled: energyForm.value.energy_enabled,
+    refresh_interval: energyForm.value.refresh_interval,
+    refresh_interval_night: energyForm.value.refresh_interval_night,
+    disable_live: energyForm.value.disable_live,
+    profile: energyForm.value.profile,
+    schedule_enabled: energyForm.value.schedule_enabled,
+    schedule_profile: energyForm.value.schedule_profile,
+    schedule_days: energyForm.value.schedule_days,
+    schedule_start: energyForm.value.schedule_start,
+    schedule_end: energyForm.value.schedule_end
+  }
+  await buildingStore.updateSensorEnergySetting(selectedSensor.value.id, payload)
+  energyDialog.value = false
+}
 
 onMounted(() => {
-  // Generate initial chart data
   generateChartData()
-
-  if (preferences.value?.dashboard_layout) {
-    layout.value = preferences.value.dashboard_layout
-  }
-  syncWidgetOptions()
 })
 </script>
+
+<style scoped>
+.sensor-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 18px;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+}
+
+.sensor-tile {
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  flex: 0 0 320px;
+  min-width: 320px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  scroll-snap-align: start;
+}
+
+.sensor-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.sensor-tile-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sensor-tile-body {
+  flex: 1 1 auto;
+}
+
+.sensor-tile-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
+}
+
+.status-dot.ok {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+}
+
+.status-dot.warning {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
+}
+
+.status-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18);
+}
+
+.pulse {
+  animation: pulse 1.2s infinite;
+}
+
+.page-header {
+  padding: 4px 2px 10px;
+}
+
+.floor-card {
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+</style>
+

@@ -260,6 +260,27 @@ CREATE INDEX IF NOT EXISTS idx_placed_sensors_room ON placed_sensors (room_id);
 CREATE INDEX IF NOT EXISTS idx_placed_sensors_type ON placed_sensors (sensor_type);
 
 -- =============================================
+-- SENSOR ENERGY SETTINGS (par capteur placé)
+-- =============================================
+CREATE TABLE IF NOT EXISTS sensor_energy_settings (
+    id SERIAL PRIMARY KEY,
+    placed_sensor_id INTEGER UNIQUE REFERENCES placed_sensors(id) ON DELETE CASCADE,
+    energy_enabled BOOLEAN DEFAULT false,
+    refresh_interval INTEGER DEFAULT 120,
+    refresh_interval_night INTEGER DEFAULT 300,
+    disable_live BOOLEAN DEFAULT true,
+    profile VARCHAR(20) DEFAULT 'normal',
+    schedule_enabled BOOLEAN DEFAULT false,
+    schedule_profile VARCHAR(20) DEFAULT 'eco',
+    schedule_days JSONB DEFAULT '[]',
+    schedule_start VARCHAR(10) DEFAULT '22:00',
+    schedule_end VARCHAR(10) DEFAULT '06:00',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sensor_energy_settings_sensor ON sensor_energy_settings (placed_sensor_id);
+
+-- =============================================
 -- SYSTEM SETTINGS (paramètres système globaux)
 -- =============================================
 CREATE TABLE IF NOT EXISTS system_settings (

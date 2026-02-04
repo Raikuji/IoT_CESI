@@ -184,7 +184,13 @@
       </v-window-item>
 
       <v-window-item value="rules">
-        <v-card class="mb-6" ref="ruleFormCard">
+        <div v-if="!isEditing" class="d-flex justify-end mb-4">
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="showRuleForm = !showRuleForm">
+            {{ showRuleForm ? 'Masquer le formulaire' : 'Nouvelle règle' }}
+          </v-btn>
+        </div>
+
+        <v-card v-if="showRuleForm" class="mb-6" ref="ruleFormCard">
           <v-card-title class="d-flex align-center">
             <v-icon start color="primary">mdi-tune-variant</v-icon>
             <span class="font-weight-bold">
@@ -304,6 +310,9 @@
           <v-data-table
             :headers="ruleHeaders"
             :items="rules"
+            :sort-by="[{ key: 'name', order: 'asc' }]"
+            :must-sort="true"
+            :multi-sort="false"
             :loading="rulesLoading"
             class="bg-transparent"
           >
@@ -327,6 +336,8 @@
             <template v-slot:item.is_active="{ item }">
               <v-switch
                 v-model="item.is_active"
+                color="success"
+                base-color="error"
                 density="compact"
                 hide-details
                 @update:modelValue="toggleRule(item)"
@@ -350,7 +361,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAlertsStore } from '@/stores/alerts'
 import { useSensorsStore } from '@/stores/sensors'
@@ -372,6 +383,7 @@ const ruleError = ref('')
 const isEditing = ref(false)
 const editingRuleId = ref(null)
 const ruleFormCard = ref(null)
+const showRuleForm = ref(false)
 
 const ruleForm = ref({
   name: '',
@@ -408,7 +420,7 @@ const ruleHeaders = [
   { title: 'Sévérité', key: 'severity' },
   { title: 'Horaires', key: 'schedule' },
   { title: 'Escalade', key: 'escalation' },
-  { title: 'Active', key: 'is_active', width: '100px' },
+  { title: 'Active', key: 'is_active', width: '100px', sortable: false },
   { title: 'Actions', key: 'actions', width: '120px', sortable: false }
 ]
 
@@ -540,7 +552,10 @@ function buildRulePayload() {
     active_days: ruleForm.value.active_days?.length ? ruleForm.value.active_days : null,
     active_time_start: ruleForm.value.time_start || null,
     active_time_end: ruleForm.value.time_end || null,
-    cooldown_minutes: ruleForm.value.cooldown_minutes ?? 5
+    cooldown_minutes: ruleForm.value.cooldown_minutes ?? 5,
+    sensor_id: null,
+    sensor_type: null,
+    room_id: null
   }
 
   if (ruleForm.value.target === 'sensor') {
@@ -555,10 +570,28 @@ function buildRulePayload() {
   if (ruleForm.value.escalation_enabled) {
     payload.escalation_minutes = ruleForm.value.escalation_minutes
     payload.escalation_severity = ruleForm.value.escalation_severity
+  } else {
+    payload.escalation_minutes = null
+    payload.escalation_severity = null
   }
 
   return payload
 }
+
+watch(
+  () => ruleForm.value.target,
+  (target) => {
+    if (target === 'sensor') {
+      ruleForm.value.sensor_type = null
+      ruleForm.value.room_id = ''
+    } else if (target === 'room') {
+      ruleForm.value.sensor_id = null
+    } else if (target === 'type') {
+      ruleForm.value.sensor_id = null
+      ruleForm.value.room_id = ''
+    }
+  }
+)
 
 function resetForm() {
   ruleForm.value = {
@@ -583,6 +616,7 @@ function resetForm() {
   ruleError.value = ''
   isEditing.value = false
   editingRuleId.value = null
+  showRuleForm.value = false
 }
 
 async function submitRule() {
@@ -601,12 +635,14 @@ async function submitRule() {
     return
   }
 
+  await alertsStore.fetchRules()
   resetForm()
 }
 
 function editRule(rule) {
   isEditing.value = true
   editingRuleId.value = rule.id
+  showRuleForm.value = true
 
   ruleForm.value = {
     name: rule.name || '',
@@ -633,6 +669,7 @@ function editRule(rule) {
 
 async function removeRule(rule) {
   await alertsStore.deleteRule(rule.id)
+  await alertsStore.fetchRules()
 }
 
 async function toggleRule(rule) {

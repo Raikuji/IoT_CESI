@@ -131,7 +131,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 anomaly_type="spike",
                 message=message,
                 severity="warning",
-                metadata={"mean": mean, "std": std, "value": value}
+                metadata_json={"mean": mean, "std": std, "value": value}
             )
             db.add(anomaly)
             db.commit()
@@ -143,7 +143,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 "message": anomaly.message,
                 "severity": anomaly.severity,
                 "created_at": anomaly.created_at.isoformat() if anomaly.created_at else None,
-                "metadata": anomaly.metadata
+                "metadata": anomaly.metadata_json
             })
             alert = Alert(
                 sensor_id=sensor.id,
@@ -165,7 +165,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 anomaly_type="stuck",
                 message=message,
                 severity="warning",
-                metadata={"window": stuck_window, "value": value}
+                metadata_json={"window": stuck_window, "value": value}
             )
             db.add(anomaly)
             db.commit()
@@ -177,7 +177,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 "message": anomaly.message,
                 "severity": anomaly.severity,
                 "created_at": anomaly.created_at.isoformat() if anomaly.created_at else None,
-                "metadata": anomaly.metadata
+                "metadata": anomaly.metadata_json
             })
             alert = Alert(
                 sensor_id=sensor.id,
@@ -206,7 +206,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 anomaly_type="drift",
                 message=message,
                 severity="info",
-                metadata={"slope": slope, "window": drift_window}
+                metadata_json={"slope": slope, "window": drift_window}
             )
             db.add(anomaly)
             db.commit()
@@ -218,7 +218,7 @@ def _detect_anomalies(db, sensor: Sensor, value: float, room_id: str):
                 "message": anomaly.message,
                 "severity": anomaly.severity,
                 "created_at": anomaly.created_at.isoformat() if anomaly.created_at else None,
-                "metadata": anomaly.metadata
+                "metadata": anomaly.metadata_json
             })
             alert = Alert(
                 sensor_id=sensor.id,

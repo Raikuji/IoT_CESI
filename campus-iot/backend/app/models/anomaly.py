@@ -15,5 +15,5 @@ class Anomaly(Base):
     anomaly_type = Column(String(50), nullable=False)  # spike, stuck, drift
     message = Column(Text)
     severity = Column(String(20), default="warning")
-    metadata = Column(JSONB, nullable=True)
+    metadata_json = Column("metadata", JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

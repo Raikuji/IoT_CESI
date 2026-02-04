@@ -15,6 +15,7 @@ from schemas import (
 )
 from api.auth import require_permission, require_any_permission
 from services.audit_service import log_audit
+from services.websocket_manager import ws_manager
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -260,7 +261,7 @@ def get_alert_rules(
 
 
 @router.post("/rules", response_model=AlertRuleResponse)
-def create_alert_rule(
+async def create_alert_rule(
     rule: AlertRuleCreate,
     current_user=Depends(require_permission("alerts")),
     db: Session = Depends(get_db),
@@ -281,6 +282,13 @@ def create_alert_rule(
     db.commit()
     db.refresh(db_rule)
 
+    # Broadcast to all clients
+    await ws_manager.broadcast({
+        "type": "alert_rules_changed",
+        "action": "create",
+        "rule": alert_rule_snapshot(db_rule)
+    })
+
     log_audit(
         db=db,
         user_id=current_user.id,
@@ -296,7 +304,7 @@ def create_alert_rule(
 
 
 @router.patch("/rules/{rule_id}", response_model=AlertRuleResponse)
-def update_alert_rule(
+async def update_alert_rule(
     rule_id: int,
     rule: AlertRuleUpdate,
     current_user=Depends(require_permission("alerts")),
@@ -328,6 +336,13 @@ def update_alert_rule(
     db.commit()
     db.refresh(db_rule)
 
+    # Broadcast to all clients
+    await ws_manager.broadcast({
+        "type": "alert_rules_changed",
+        "action": "update",
+        "rule": alert_rule_snapshot(db_rule)
+    })
+
     log_audit(
         db=db,
         user_id=current_user.id,
@@ -343,7 +358,7 @@ def update_alert_rule(
 
 
 @router.delete("/rules/{rule_id}")
-def delete_alert_rule(
+async def delete_alert_rule(
     rule_id: int,
     current_user=Depends(require_permission("alerts")),
     db: Session = Depends(get_db),
@@ -357,6 +372,13 @@ def delete_alert_rule(
     before = alert_rule_snapshot(db_rule)
     db.delete(db_rule)
     db.commit()
+
+    # Broadcast to all clients
+    await ws_manager.broadcast({
+        "type": "alert_rules_changed",
+        "action": "delete",
+        "rule_id": rule_id
+    })
 
     log_audit(
         db=db,

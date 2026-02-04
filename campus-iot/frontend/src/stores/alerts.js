@@ -56,7 +56,9 @@ export const useAlertsStore = defineStore('alerts', () => {
 
   async function fetchRules() {
     try {
-      const response = await axios.get('/api/alerts/rules')
+      const response = await axios.get('/api/alerts/rules', {
+        params: { active_only: false }
+      })
       rules.value = response.data
     } catch (e) {
       console.error('Failed to fetch alert rules:', e)

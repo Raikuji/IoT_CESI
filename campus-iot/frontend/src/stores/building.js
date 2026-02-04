@@ -87,6 +87,9 @@ export const useBuildingStore = defineStore('building', () => {
   const sensors = ref([])
   const cacheKey = 'campus-iot-placed-sensors-cache'
 
+  // Energy settings per placed sensor
+  const energySettings = ref({})
+
   // Available sensor types for drag & drop
   const sensorTypes = ref([
     { type: 'temperature', icon: 'mdi-thermometer', color: '#ff6b6b', name: 'Température' },
@@ -121,6 +124,26 @@ export const useBuildingStore = defineStore('building', () => {
   const totalSensors = computed(() => sensors.value.length)
   const onlineSensors = computed(() => sensors.value.filter(s => s.status === 'ok').length)
 
+  function defaultEnergySetting() {
+    return {
+      placed_sensor_id: null,
+      energy_enabled: false,
+      refresh_interval: 120,
+      refresh_interval_night: 300,
+      disable_live: true,
+      profile: 'normal',
+      schedule_enabled: false,
+      schedule_profile: 'eco',
+      schedule_days: [],
+      schedule_start: '22:00',
+      schedule_end: '06:00'
+    }
+  }
+
+  function getEnergySetting(sensorId) {
+    return energySettings.value[sensorId] || { ...defaultEnergySetting(), placed_sensor_id: sensorId }
+  }
+
   // =============================================
   // API ACTIONS - Synced with Supabase
   // =============================================
@@ -154,6 +177,34 @@ export const useBuildingStore = defineStore('building', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function fetchSensorEnergySetting(sensorId) {
+    try {
+      const response = await axios.get(`/api/placed-sensors/${sensorId}/energy`)
+      energySettings.value[sensorId] = response.data
+      return response.data
+    } catch (e) {
+      console.error('Failed to fetch sensor energy setting:', e)
+      return getEnergySetting(sensorId)
+    }
+  }
+
+  async function updateSensorEnergySetting(sensorId, payload) {
+    try {
+      const response = await axios.put(`/api/placed-sensors/${sensorId}/energy`, payload)
+      energySettings.value[sensorId] = response.data
+      return response.data
+    } catch (e) {
+      console.error('Failed to update sensor energy setting:', e)
+      return null
+    }
+  }
+
+  async function ensureEnergySettings(sensorIds = []) {
+    const missing = sensorIds.filter(id => !energySettings.value[id])
+    if (!missing.length) return
+    await Promise.all(missing.map(id => fetchSensorEnergySetting(id)))
   }
 
   function loadCache() {
@@ -264,6 +315,13 @@ export const useBuildingStore = defineStore('building', () => {
     }
   }
 
+  function handleSensorEnergyUpdated(message) {
+    if (!message?.sensor_id) return
+    if (message.settings) {
+      energySettings.value[message.sensor_id] = message.settings
+    }
+  }
+
   // Update sensor value (from MQTT or manual)
   async function updateSensorValue(sensorId, value, status = 'ok') {
     const sensor = sensors.value.find(s => s.id === sensorId)
@@ -362,12 +420,18 @@ export const useBuildingStore = defineStore('building', () => {
     setFloor,
     fetchSensors,
     addSensor,
+    energySettings,
+    getEnergySetting,
     updateSensorPosition,
+    fetchSensorEnergySetting,
+    updateSensorEnergySetting,
+    ensureEnergySettings,
     moveSensorToRoom,
     removeSensor,
     updateSensorValue,
     updateSensorByTypeAndRoom,
     handleSensorPlaced,
+    handleSensorEnergyUpdated,
     handleSensorUpdated,
     handleSensorRemoved
   }

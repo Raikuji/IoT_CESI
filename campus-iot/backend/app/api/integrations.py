@@ -30,7 +30,7 @@ async def create_webhook(
     current_user=Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    endpoint = WebhookEndpoint(**data.model_dump())
+    endpoint = WebhookEndpoint(**data.model_dump(mode="json"))
     db.add(endpoint)
     db.commit()
     db.refresh(endpoint)
@@ -48,7 +48,7 @@ async def update_webhook(
     if not endpoint:
         raise HTTPException(status_code=404, detail="Webhook introuvable")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in data.model_dump(exclude_unset=True, mode="json").items():
         setattr(endpoint, key, value)
 
     db.commit()

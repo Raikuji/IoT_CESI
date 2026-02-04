@@ -73,6 +73,10 @@ export function useWebSocket() {
       case 'alert':
         alertsStore.addAlert(message.data)
         break
+
+      case 'alert_rules_changed':
+        alertsStore.fetchRules()
+        break
       
       case 'actuator_status':
         // Handle actuator updates
@@ -91,6 +95,10 @@ export function useWebSocket() {
       
       case 'sensor_removed':
         buildingStore.handleSensorRemoved(message)
+        break
+
+      case 'sensor_energy_updated':
+        buildingStore.handleSensorEnergyUpdated(message)
         break
       
       case 'sensors_bulk_placed':

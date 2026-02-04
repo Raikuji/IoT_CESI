@@ -17,9 +17,6 @@
             <v-icon start>mdi-bell-cog</v-icon>
             Règles d'alerte
             <v-spacer></v-spacer>
-            <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="showAddRule = true">
-              Ajouter
-            </v-btn>
           </v-card-title>
           <v-card-text>
             <v-list bg-color="transparent">
@@ -43,7 +40,8 @@
                 <template v-slot:append>
                   <v-switch
                     v-model="rule.is_active"
-                    color="primary"
+                    color="success"
+                    base-color="error"
                     hide-details
                     density="compact"
                     @change="toggleRule(rule)"
@@ -109,129 +107,6 @@
                     hide-details
                     @change="toggleTheme"
                   ></v-switch>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-card-text>
-        </v-card>
-
-        <!-- Energy Saving -->
-        <v-card color="surface" class="mt-4">
-          <v-card-title>
-            <v-icon start>mdi-power-plug</v-icon>
-            Économie d'énergie
-          </v-card-title>
-          <v-card-text>
-            <v-list bg-color="transparent">
-              <v-list-item>
-                <v-list-item-title>Profil</v-list-item-title>
-                <template v-slot:append>
-                  <v-select
-                    v-model="energyProfile"
-                    :items="energyProfileOptions"
-                    density="compact"
-                    style="max-width: 160px"
-                    @update:modelValue="applyEnergyProfile"
-                  ></v-select>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Mode éco</v-list-item-title>
-                <template v-slot:append>
-                  <v-switch
-                    v-model="energySavingEnabled"
-                    color="primary"
-                    hide-details
-                  ></v-switch>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Désactiver le temps réel</v-list-item-title>
-                <template v-slot:append>
-                  <v-switch
-                    v-model="energySavingDisableLive"
-                    color="primary"
-                    hide-details
-                  ></v-switch>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Intervalle rafraîchissement (sec)</v-list-item-title>
-                <template v-slot:append>
-                  <v-text-field
-                    v-model.number="energySavingRefreshInterval"
-                    type="number"
-                    density="compact"
-                    style="max-width: 120px"
-                  ></v-text-field>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Intervalle nuit (sec)</v-list-item-title>
-                <template v-slot:append>
-                  <v-text-field
-                    v-model.number="energySavingRefreshIntervalNight"
-                    type="number"
-                    density="compact"
-                    style="max-width: 120px"
-                  ></v-text-field>
-                </template>
-              </v-list-item>
-            </v-list>
-
-            <v-divider class="my-4"></v-divider>
-
-            <v-list bg-color="transparent">
-              <v-list-item>
-                <v-list-item-title>Planning automatique</v-list-item-title>
-                <template v-slot:append>
-                  <v-switch
-                    v-model="energyScheduleEnabled"
-                    color="primary"
-                    hide-details
-                  ></v-switch>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Profil planifié</v-list-item-title>
-                <template v-slot:append>
-                  <v-select
-                    v-model="energyScheduleProfile"
-                    :items="energyProfileOptions"
-                    density="compact"
-                    style="max-width: 160px"
-                  ></v-select>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Jours actifs</v-list-item-title>
-                <template v-slot:append>
-                  <v-select
-                    v-model="energyScheduleDays"
-                    :items="dayOptions"
-                    multiple
-                    density="compact"
-                    style="max-width: 220px"
-                  ></v-select>
-                </template>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-title>Plage horaire</v-list-item-title>
-                <template v-slot:append>
-                  <div class="d-flex ga-2">
-                    <v-text-field
-                      v-model="energyScheduleStart"
-                      type="time"
-                      density="compact"
-                      style="max-width: 120px"
-                    ></v-text-field>
-                    <v-text-field
-                      v-model="energyScheduleEnd"
-                      type="time"
-                      density="compact"
-                      style="max-width: 120px"
-                    ></v-text-field>
-                  </div>
                 </template>
               </v-list-item>
             </v-list>
@@ -318,13 +193,10 @@ import { storeToRefs } from 'pinia'
 import { useTheme } from 'vuetify'
 import { useSensorsStore } from '@/stores/sensors'
 import { useAlertsStore } from '@/stores/alerts'
-import { useSettingsStore } from '@/stores/settings'
-import axios from 'axios'
 
 const theme = useTheme()
 const sensorsStore = useSensorsStore()
 const alertsStore = useAlertsStore()
-const settingsStore = useSettingsStore()
 
 const { sensors } = storeToRefs(sensorsStore)
 const { rules: alertRules } = storeToRefs(alertsStore)
@@ -332,106 +204,6 @@ const { rules: alertRules } = storeToRefs(alertsStore)
 const isDark = ref(theme.global.current.value.dark)
 const showAddRule = ref(false)
 
-const energySavingEnabled = computed({
-  get: () => settingsStore.energySavingEnabled.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_saving_enabled', val)
-  }
-})
-
-const energySavingRefreshInterval = computed({
-  get: () => settingsStore.energySavingRefreshInterval.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_saving_refresh_interval', val)
-  }
-})
-
-const energySavingRefreshIntervalNight = computed({
-  get: () => settingsStore.energySavingRefreshIntervalNight.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_saving_refresh_interval_night', val)
-  }
-})
-
-const energySavingDisableLive = computed({
-  get: () => settingsStore.energySavingDisableLive.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_saving_disable_live', val)
-  }
-})
-
-const energyProfile = computed({
-  get: () => settingsStore.energyProfile.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_profile', val)
-  }
-})
-
-const energyScheduleEnabled = computed({
-  get: () => settingsStore.energyScheduleEnabled.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_schedule_enabled', val)
-  }
-})
-
-const energyScheduleProfile = computed({
-  get: () => settingsStore.energyScheduleProfile.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_schedule_profile', val)
-  }
-})
-
-const energyScheduleDays = computed({
-  get: () => settingsStore.energyScheduleDays.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_schedule_days', val)
-  }
-})
-
-const energyScheduleStart = computed({
-  get: () => settingsStore.energyScheduleStart.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_schedule_start', val)
-  }
-})
-
-const energyScheduleEnd = computed({
-  get: () => settingsStore.energyScheduleEnd.value,
-  set: async (val) => {
-    await settingsStore.updateSetting('energy_schedule_end', val)
-  }
-})
-
-const energyProfileOptions = [
-  { title: 'Normal', value: 'normal' },
-  { title: 'Éco', value: 'eco' },
-  { title: 'Nuit', value: 'night' }
-]
-
-const dayOptions = [
-  { title: 'Lun', value: 0 },
-  { title: 'Mar', value: 1 },
-  { title: 'Mer', value: 2 },
-  { title: 'Jeu', value: 3 },
-  { title: 'Ven', value: 4 },
-  { title: 'Sam', value: 5 },
-  { title: 'Dim', value: 6 }
-]
-
-async function applyEnergyProfile(profile) {
-  const presets = {
-    normal: { enabled: false, interval: 60, disableLive: false },
-    eco: { enabled: true, interval: 120, disableLive: true },
-    night: { enabled: true, interval: 300, disableLive: true }
-  }
-  const preset = presets[profile] || presets.normal
-  await settingsStore.updateSettings({
-    energy_profile: profile,
-    energy_saving_enabled: preset.enabled,
-    energy_saving_refresh_interval: preset.interval,
-    energy_saving_disable_live: preset.disableLive
-  })
-}
 
 const newRule = ref({
   sensor_id: null,
@@ -483,18 +255,13 @@ function getSensorName(sensorId) {
 }
 
 async function toggleRule(rule) {
-  try {
-    await axios.patch(`/api/alerts/rules/${rule.id}`, {
-      is_active: rule.is_active
-    })
-  } catch (e) {
-    console.error('Failed to toggle rule:', e)
-  }
+  await alertsStore.updateRule(rule.id, { is_active: rule.is_active })
+  await alertsStore.fetchRules()
 }
 
 async function addRule() {
-  try {
-    await axios.post('/api/alerts/rules', newRule.value)
+  const result = await alertsStore.createRule(newRule.value)
+  if (result.success) {
     await alertsStore.fetchRules()
     showAddRule.value = false
     newRule.value = {
@@ -504,13 +271,10 @@ async function addRule() {
       message: '',
       severity: 'warning'
     }
-  } catch (e) {
-    console.error('Failed to add rule:', e)
   }
 }
 
 onMounted(() => {
   alertsStore.fetchRules()
-  settingsStore.fetchSettings()
 })
 </script>
