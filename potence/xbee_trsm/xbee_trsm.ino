@@ -44,6 +44,8 @@ int16_t  dig_H5;
 int8_t   dig_H6;
 int32_t t_fine;
 
+char room[5] = "X003";
+
 void setup() {
   Wire.begin();
   Serial.begin(9600);
@@ -72,6 +74,13 @@ void loop() {
 
   // 1. Lecture de la valeur analogique (0 à 1023)
   int sensorValue = analogRead(A0);
+  int buttonValue = analogRead(A1);
+  Serial.println(buttonValue);
+  if(buttonValue > 500) {
+    strcpy(room,"C101");
+  } else {
+    strcpy(room,"X003");
+  }
   
   sendXbee('P', &sensorValue, sizeof(int32_t));
   sendXbee('T', &tempFloat, sizeof(float));
@@ -82,8 +91,10 @@ void loop() {
 
   double dist = readDistance();
   char payloadPres[100] = "\0";
-  strcat(payloadPres, "{\"room\":\"X003\",\"value\":");
-  if(dist < 1000.0) {
+  strcat(payloadPres, "{\"room\":\"");
+  strcat(payloadPres, room);
+  strcat(payloadPres, "\",\"value\":");
+  if(dist < 300.0) {
     Serial.println("Occupation de la salle");
     strcat(payloadPres, "1");
   } else {
@@ -95,7 +106,9 @@ void loop() {
   char tempString[6];
   dtostrf(temp, 1, 2, tempString);
   char payloadTemp[100] = "\0";
-  strcat(payloadTemp, "{\"room\":\"X003\",\"value\":");
+  strcat(payloadTemp, "{\"room\":\"");
+  strcat(payloadTemp, room);
+  strcat(payloadTemp, "\",\"value\":");
   strcat(payloadTemp, tempString);
   strcat(payloadTemp, "}");
 
@@ -103,7 +116,9 @@ void loop() {
   char humiString[6];
   dtostrf(humidity, 1, 2, humiString);
   char payloadHumi[100] = "\0";
-  strcat(payloadHumi, "{\"room\":\"X003\",\"value\":");
+  strcat(payloadHumi, "{\"room\":\"");
+  strcat(payloadHumi, room);
+  strcat(payloadHumi, "\",\"value\":");
   strcat(payloadHumi, humiString);
   strcat(payloadHumi, "}");
   Serial.print("Humidité : ");
