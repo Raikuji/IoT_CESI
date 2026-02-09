@@ -118,6 +118,7 @@ async def add_block(
     # Save to database
     new_block = Block(
         index=block_data["index"],
+        timestamp=datetime.fromisoformat(block_data["timestamp"]),
         sensor_type=block_data["sensor_type"],
         sensor_value=block_data["sensor_value"],
         data_hash=block_data["data_hash"],
@@ -147,6 +148,7 @@ def _create_genesis_block(db: Session) -> Block:
     
     genesis = Block(
         index=0,
+        timestamp=datetime.fromisoformat(genesis_data["timestamp"]),
         sensor_type="genesis",
         sensor_value="0",
         data_hash=genesis_data["data_hash"],

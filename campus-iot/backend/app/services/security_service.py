@@ -8,7 +8,7 @@ import hashlib
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy.orm import Session
 
@@ -135,9 +135,10 @@ class SimpleBlockchain:
     
     def create_genesis_block(self) -> Dict:
         """Create the first block in the chain"""
+        timestamp = datetime.now(timezone.utc).isoformat()
         return {
             "index": 0,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": timestamp,
             "data_hash": "0" * 64,
             "sensor_type": "genesis",
             "sensor_value": "0",
@@ -145,7 +146,7 @@ class SimpleBlockchain:
             "nonce": 0,
             "hash": self.compute_hash({
                 "index": 0,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": timestamp,
                 "data_hash": "0" * 64,
                 "previous_hash": "0" * 64,
                 "nonce": 0
@@ -160,7 +161,7 @@ class SimpleBlockchain:
         data_hash = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
         
         nonce = 0
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         while True:
             block_data = {
