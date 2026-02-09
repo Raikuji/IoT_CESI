@@ -207,6 +207,55 @@
                 <code class="text-caption">{{ signedResult.signature?.substring(0, 32) }}...</code>
               </v-alert>
             </div>
+
+            <v-textarea
+              v-model="signedPayload"
+              label="Payload signé"
+              placeholder="temperature:23.5|ts:...|sig:..."
+              variant="outlined"
+              density="compact"
+              rows="3"
+              class="mt-3"
+            ></v-textarea>
+            <v-btn
+              color="success"
+              variant="flat"
+              block
+              class="mt-2"
+              @click="verifyHmac"
+              :loading="verifyingHmac"
+              :disabled="!signedPayload"
+            >
+              <v-icon start>mdi-shield-check</v-icon>
+              Vérifier
+            </v-btn>
+
+            <v-btn
+              color="primary"
+              variant="text"
+              block
+              class="mt-1"
+              @click="generateSignedPayload"
+              :loading="generatingPayload"
+            >
+              <v-icon start>mdi-test-tube</v-icon>
+              Générer un exemple
+            </v-btn>
+
+            <div v-if="hmacVerifyResult" class="mt-3">
+              <v-alert
+                :type="hmacVerifyResult.valid ? 'success' : 'error'"
+                variant="tonal"
+                density="compact"
+              >
+                <div class="text-caption">
+                  {{ hmacVerifyResult.valid ? 'Signature valide' : 'Signature invalide' }}
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ hmacVerifyResult.message }}
+                </div>
+              </v-alert>
+            </div>
           </v-card-text>
         </v-card>
 
@@ -257,7 +306,7 @@
               </v-list-item>
             </v-list>
             
-            <v-alert v-else type="success" variant="tonal" density="compact">
+            <v-alert v-else type="success" variant="tonal" density="compact" :icon="false">
               <v-icon start>mdi-shield-check</v-icon>
               Aucune alerte de sécurité
             </v-alert>
@@ -309,10 +358,14 @@ const blocks = ref([])
 const alerts = ref([])
 const testMessage = ref('temperature:23.5')
 const signedResult = ref(null)
+const signedPayload = ref('')
+const hmacVerifyResult = ref(null)
 const verifyResult = ref(null)
 const verifyDialog = ref(false)
 const verifying = ref(false)
 const signing = ref(false)
+const verifyingHmac = ref(false)
+const generatingPayload = ref(false)
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 // Computed
@@ -375,10 +428,42 @@ async function signMessage() {
       method: 'POST'
     })
     signedResult.value = await res.json()
+    signedPayload.value = signedResult.value?.signed_format || ''
+    hmacVerifyResult.value = null
   } catch (e) {
     console.error('Failed to sign message:', e)
   } finally {
     signing.value = false
+  }
+}
+
+async function generateSignedPayload() {
+  generatingPayload.value = true
+  try {
+    const res = await fetch(`${API_URL}/security/test-signature`)
+    const data = await res.json()
+    signedPayload.value = data.full_payload || ''
+    testMessage.value = data.message_to_sign || testMessage.value
+    hmacVerifyResult.value = null
+  } catch (e) {
+    console.error('Failed to generate signed payload:', e)
+  } finally {
+    generatingPayload.value = false
+  }
+}
+
+async function verifyHmac() {
+  if (!signedPayload.value) return
+  verifyingHmac.value = true
+  try {
+    const res = await fetch(`${API_URL}/security/verify?raw_data=${encodeURIComponent(signedPayload.value)}`, {
+      method: 'POST'
+    })
+    hmacVerifyResult.value = await res.json()
+  } catch (e) {
+    console.error('Failed to verify HMAC:', e)
+  } finally {
+    verifyingHmac.value = false
   }
 }
 
