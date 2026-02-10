@@ -2,7 +2,7 @@
 ## Documentation complète : Architecture, choix techniques et modes d'emploi
 
 **Date** : 10 février 2026  
-**Projet** : IoT Campus Intelligent - Bâtiment Orion  
+**Projet** : IoT Campus Intelligent 
 **Établissement** : CESI Nancy  
 **Version** : 1.0  
 **Dépôt Git** : https://github.com/Raikuji/IoT_CESI
@@ -30,8 +30,8 @@
 ├─────────────────────────────────────────────────────────────────────┤
 │  • BME280 (Température, Humidité, Pression)                         │
 │  • HC-SR04 (Distance/Présence)                                      │
-│  • Potentiomètre (Luminosité)                                       │
-│  • MQ-135 (CO2)                                                     │
+│  • Potentiomètre (CO2 simulé, 0-1023 ADC)                           │
+│  Optionnel: MQ-135 (CO2 réel)                                       │
 │  Connectivité: Serial (I2C, GPIO, ADC) → Arduino Mega              │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
@@ -144,7 +144,7 @@
 |--------|-------|---------------|
 | **Pourquoi Arduino Mega** | Microcontrôleur robuste + ports multiples | 2x port I2C, PWM, ADC, mémoire suffisante pour HMAC, prix abordable |
 | **Pourquoi I2C** | Standard pour capteurs numériques | Consommation faible, 2 fils (SDA/SCL), adressage multiple, fiabilité |
-| **Pourquoi GPIO analogique** | Capture du potentiomètre | Conversion ADC 10-bit suffisante (~0.1V précision) |
+| **Pourquoi GPIO analogique** | Capture du potentiomètre (CO2) | Conversion ADC 10-bit suffisante (~0.1V précision), simulation CO2 acceptable pour MVP |
 
 #### 2. **Communication longue distance : ZigBee (XBee)**
 
@@ -249,11 +249,12 @@
 - **Raison** : Atténuation béton/métal, 250 kbps limite portée
 - **Mitigation** : Ajouter routeurs XBee (coût ~80€/unité), maillage auto-guérison
 
-#### 3. **Pas de chiffrement MQTT (communication en clair)**
+#### 3. **Authentification et chiffrement MQTT**
 
-- **Impact** : Quelqu'un sur le réseau local peut écouter les capteurs
-- **Raison** : TLS/SSL ajoute latence (~5-10%), réseau interne supposé sécurisé
-- **Mitigation** : Réseau WiFi/Ethernet protégé par mot de passe, future évolution avec TLS optionnel
+- **Statut** : ✅ Implémenté
+- **Implémentation** : TLS/SSL + username/password sur Mosquitto
+- **Sécurité** : Communication chiffrée (port 8883), authentification par topic ACL
+- **Performance** : Latence additionnelle < 5ms, acceptable
 
 #### 4. **Alimentation des capteurs (USB/secteur, pas de batterie)**
 
@@ -283,7 +284,7 @@
 
 | Optimisation | Effort | Bénéfice |
 |--------------|--------|----------|
-| Ajouter TLS sur MQTT | Facile | Sécurité réseau +++ |
+| ✅ TLS sur MQTT | Implémenté | Sécurité réseau +++ |
 | Clustering PostgreSQL | Moyen | Haute dispo ++ |
 | Horizontale API (load balancer) | Moyen | Scalabilité +++ |
 | Cache Redis (sessions/métriques) | Moyen | Perf API ++ |
@@ -495,7 +496,7 @@ Arduino Mega 2560
 │  ├─ Pin 5 = Moteur PWM (relay)
 │  └─ Pin 6 = Speaker PWM (driver audio)
 ├─ Port ADC
-│  └─ A0 = Potentiomètre (0-1023)
+│  └─ A0 = Potentiomètre CO2 (0-1023 = 0-500 ppm simulé)
 └─ Shield XBee
    └─ XBee Coordinator (PAN ID: 1234, Channel: 15)
 ```
@@ -711,7 +712,7 @@ curl -X POST http://localhost:8000/api/actuators/motor/command \
 - [ ] Arduino Mega flashé avec gateway.ino
 - [ ] XBee Coordinator sur le shield, port COM disponible
 - [ ] XBee End Devices configurés (XCTU): PAN ID 1234, Channel 15
-- [ ] Capteurs câblés: BME280 (I2C), HC-SR04 (GPIO 7/8), Potentiomètre (A0)
+- [ ] Capteurs câblés: BME280 (I2C), HC-SR04 (GPIO 7/8), Potentiomètre CO2 (A0)
 - [ ] Moteur/Speaker câblés: Relais (PWM 5), Speaker driver (PWM 6)
 - [ ] Moniteur série: Messages OK sans erreur
 - [ ] Bridge Python lancé: "Connected to MQTT broker"
