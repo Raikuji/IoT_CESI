@@ -16,9 +16,12 @@
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [Utilisation](#-utilisation)
+- [Documentation utilisateur](#-documentation-utilisateur)
 - [Structure du projet](#-structure-du-projet)
 - [API Documentation](#-api-documentation)
 - [Sécurité](#-sécurité)
+- [Spécifications, performance et autonomie](#-spécifications-performance-et-autonomie)
+- [Dépannage (debug)](#-dépannage-debug)
 - [Auteurs](#-auteurs)
 
 ## 🎯 À propos
@@ -409,6 +412,40 @@ python mqtt_bridge.py
 - `dist` : Mesure distance
 - `motor 150` : Contrôle moteur à 150/255
 - `pub X108 temp 22` : Publier sur salle spécifique
+
+## 📘 Documentation utilisateur
+
+### Mode d’emploi (Admin)
+1. **Se connecter** avec un compte admin.
+2. **Créer les utilisateurs** et attribuer les rôles (Admin/Technicien/Responsable/Utilisateur).
+3. **Placer les capteurs** dans les salles (Bâtiment → Salles → Placement).
+4. **Configurer l’énergie** par capteur (profil Normal/Éco/Nuit + intervalle).
+5. **Surveiller les alertes** et les acquitter/résoudre.
+6. **Contrôler les actionneurs** (moteur/speaker) selon les besoins.
+
+### Mode d’emploi (Usager)
+1. **Se connecter** avec un compte utilisateur.
+2. **Consulter le dashboard** (indicateurs clés + cartes salles).
+3. **Lire les graphiques** d’évolution (1h/6h/24h).
+4. **Suivre les alertes** (niveau, statut, historique).
+5. **Exporter les données** si le rôle le permet.
+
+## 📈 Spécifications, performance et autonomie
+
+- **Latence capteur → dashboard** : < 2 s en conditions normales (XBee + MQTT + WebSocket + rendu UI).
+- **Fréquence d’acquisition** : 1–300 s selon le profil (Normal/Éco/Nuit).
+- **Capacité capteurs** : adaptée à un bâtiment (~50 capteurs max, limite pratique côté coordinateur).
+- **Débit MQTT** : ~10 000 msg/s (Mosquitto, mono‑serveur).
+- **Autonomie** : dans ce projet, les capteurs sont alimentés USB/secteur, donc l’autonomie n’est pas un facteur limitant. Les profils Éco/Nuit réduisent la consommation et le trafic réseau.
+
+## 🛠️ Dépannage (debug)
+
+- **Interface web inaccessible** : vérifier que le frontend est démarré et que l’URL est bien http://localhost.
+- **Erreur 401/403** : vérifier le compte, le rôle, la validité du token et la configuration JWT.
+- **Pas de données temps réel** : vérifier le broker MQTT, le préfixe de topics et la connexion WebSocket.
+- **Alertes manquantes** : vérifier les seuils, l’activité des capteurs et les règles d’anomalies.
+- **Actionneurs inactifs** : vérifier la disponibilité MQTT et le device ciblé.
+- **Problèmes base de données** : vérifier la connexion et l’état des migrations.
 
 ## 📂 Structure du projet
 
