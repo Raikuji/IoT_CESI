@@ -251,7 +251,7 @@
 
 #### 3. **Authentification et chiffrement MQTT**
 
-- **Statut** : ✅ Implémenté
+- **Statut** : Implémenté
 - **Implémentation** : TLS/SSL + username/password sur Mosquitto
 - **Sécurité** : Communication chiffrée (port 8883), authentification par topic ACL
 - **Performance** : Latence additionnelle < 5ms, acceptable
@@ -284,7 +284,7 @@
 
 | Optimisation | Effort | Bénéfice |
 |--------------|--------|----------|
-| ✅ TLS sur MQTT | Implémenté | Sécurité réseau +++ |
+| TLS sur MQTT | Facile | Sécurité réseau +++ |
 | Clustering PostgreSQL | Moyen | Haute dispo ++ |
 | Horizontale API (load balancer) | Moyen | Scalabilité +++ |
 | Cache Redis (sessions/métriques) | Moyen | Perf API ++ |
