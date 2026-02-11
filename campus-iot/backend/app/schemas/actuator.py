@@ -45,3 +45,4 @@ class ActuatorCommandResponse(BaseModel):
 class HeatingMode(BaseModel):
     mode: str  # "auto" or "manual"
     setpoint: Optional[float] = None  # target temperature for auto mode
+    room: Optional[str] = None  # room/salle (e.g., "C101")

@@ -103,19 +103,20 @@ def get_actuator_commands(
 
 
 # Heating specific endpoints
+@router.get("/heating/state")
+def get_heating_state():
+    """Get current heating state (mode, setpoint, room)"""
+    return heating_state
+
+
 @router.get("/heating/mode", response_model=HeatingMode)
-def get_heating_mode(
-    current_user=Depends(require_permission("control"))
-):
+def get_heating_mode():
     """Get current heating mode"""
     return HeatingMode(**heating_state)
 
 
 @router.post("/heating/mode", response_model=HeatingMode)
-def set_heating_mode(
-    mode: HeatingMode,
-    current_user=Depends(require_permission("control"))
-):
+def set_heating_mode(mode: HeatingMode, current_user=Depends(require_permission("control"))):
     """Set heating mode (auto/manual) and setpoint"""
     if mode.mode not in ["auto", "manual"]:
         raise HTTPException(
@@ -126,6 +127,8 @@ def set_heating_mode(
     heating_state["mode"] = mode.mode
     if mode.setpoint is not None:
         heating_state["setpoint"] = mode.setpoint
+    if mode.room is not None:
+        heating_state["room"] = mode.room
     
     # Publish mode change to MQTT
     mqtt_service.publish("actuators/heating/mode", mode.mode)
@@ -136,19 +139,14 @@ def set_heating_mode(
 
 
 @router.get("/heating/setpoint")
-def get_heating_setpoint(
-    current_user=Depends(require_permission("control"))
-):
+def get_heating_setpoint():
     """Get heating temperature setpoint"""
     return {"setpoint": heating_state["setpoint"]}
 
 
 @router.post("/heating/setpoint")
-def set_heating_setpoint(
-    setpoint: float,
-    current_user=Depends(require_permission("control"))
-):
-    """Set heating temperature setpoint"""
+def set_heating_setpoint(room: str, setpoint: float, current_user=Depends(require_permission("control"))):
+    """Set heating temperature setpoint for a room"""
     if setpoint < 10 or setpoint > 30:
         raise HTTPException(
             status_code=400,
@@ -156,6 +154,14 @@ def set_heating_setpoint(
         )
     
     heating_state["setpoint"] = setpoint
-    mqtt_service.publish("actuators/heating/setpoint", str(setpoint))
     
-    return {"setpoint": setpoint}
+    # Publish to MQTT with room and setpoint
+    topic = f"campus/orion/actuators/heating"
+    payload = {
+        "room": room,
+        "mode": "manual",
+        "target": setpoint
+    }
+    mqtt_service.publish(topic, str(payload))
+    
+    return {"room": room, "setpoint": setpoint}

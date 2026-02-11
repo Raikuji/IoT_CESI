@@ -13,6 +13,9 @@
       </v-chip>
     </div>
 
+    <!-- État en direct pour consultation -->
+    <HeatingDisplay />
+
     <v-row>
       <!-- Heating Control -->
       <v-col cols="12" lg="6">
@@ -234,6 +237,7 @@ import { storeToRefs } from 'pinia'
 import { useSensorsStore } from '@/stores/sensors'
 import { useSettingsStore } from '@/stores/settings'
 import { useWebSocket } from '@/composables/useWebSocket'
+import HeatingDisplay from '@/components/HeatingDisplay.vue'
 import axios from 'axios'
 
 const sensorsStore = useSensorsStore()
