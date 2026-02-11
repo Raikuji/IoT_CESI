@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     app_name: str = "Campus IoT API"
     debug: bool = True
     
-    # Database (Supabase Transaction pooler - port 6543 avec timeout augmenté)
-    database_url: str = "postgresql://postgres.byseujemkgwqlxtkstge:IOTCESI2026@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?options=-c%20statement_timeout%3D30000"
+    # Database (Supabase Direct connection - port 5432 avec search_path=public)
+    database_url: str = "postgresql://postgres.byseujemkgwqlxtkstge:IOTCESI2026@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?options=-csearch_path%3Dpublic"
     
     # MQTT
     mqtt_broker: str = "mosquitto" 

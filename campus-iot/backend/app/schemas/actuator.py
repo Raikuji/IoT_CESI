@@ -43,6 +43,28 @@ class ActuatorCommandResponse(BaseModel):
 
 
 class HeatingMode(BaseModel):
-    mode: str  # "auto" or "manual"
-    setpoint: Optional[float] = None  # target temperature for auto mode
+    mode: str  # "auto", "manual", "eco"
+    setpoint: Optional[float] = None  # target temperature
     room: Optional[str] = None  # room/salle (e.g., "C101")
+
+
+class RoomEnergyConfig(BaseModel):
+    room: str
+    mode: str  # "manual", "eco", "auto"
+    setpoint: float  # target temperature
+    eco_setpoint: Optional[float] = None  # temperature in eco mode (default: -2°C from normal)
+    presence_timeout_minutes: int = 15  # auto switch to eco if no presence
+    
+    class Config:
+        from_attributes = True
+
+
+class RoomEnergyState(BaseModel):
+    room: str
+    mode: str
+    setpoint: float
+    eco_setpoint: float
+    current_mode: str  # actual current mode (may be auto-switched to eco)
+    has_presence: bool
+    last_presence_time: Optional[datetime] = None
+    presence_timeout_minutes: int

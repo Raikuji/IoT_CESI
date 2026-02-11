@@ -9,7 +9,8 @@ from .alert import (
 )
 from .actuator import (
     ActuatorBase, ActuatorCreate, ActuatorResponse,
-    ActuatorCommand, ActuatorCommandResponse, HeatingMode
+    ActuatorCommand, ActuatorCommandResponse, HeatingMode,
+    RoomEnergyConfig, RoomEnergyState
 )
 from .user import (
     UserBase, UserCreate, UserResponse,
