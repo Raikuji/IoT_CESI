@@ -10,8 +10,10 @@ services:
     restart: unless-stopped
     ports:
       - "1883:1883"   # MQTT
+      - "8883:8883"   # TLS Port
       - "9001:9001"   # WebSocket
     volumes:
+      - ./mosquitto/certs:/mosquitto/certs
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
