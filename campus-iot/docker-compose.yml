@@ -34,6 +34,8 @@ services:
       DATABASE_URL: postgresql://postgres.byseujemkgwqlxtkstge:IOTCESI2026@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?options=-c%20statement_timeout%3D30000
       MQTT_BROKER: mosquitto
       MQTT_PORT: 1883
+      MQTT_USERNAME: groupe3
+      MQTT_PASSWORD: campus-iot
       SECRET_KEY: ${SECRET_KEY:-campus-iot-secret-key-2024}
       BACKUPS_ENABLED: "true"
       BACKUP_INTERVAL_MINUTES: "1440"

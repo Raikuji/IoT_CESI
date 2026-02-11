@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # MQTT
     mqtt_broker: str = "mosquitto" 
     mqtt_port: int = 1883
+    mqtt_username: str = "groupe3"
+    mqtt_password: str = "campus-iot"
     mqtt_topic_prefix: str = "campus/orion"  
     
     # Auth

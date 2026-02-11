@@ -85,6 +85,8 @@ class MQTTService:
     def connect(self):
         """Connect to MQTT broker"""
         try:
+            # Set username and password for MQTT authentication
+            self.client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
             self.client.connect(settings.mqtt_broker, settings.mqtt_port, 60)
             self.client.loop_start()
             logger.info("MQTT client started")

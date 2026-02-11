@@ -4001,3 +4001,21 @@
 1770802991: Sending PINGRESP to auto-89075646-6685-643B-FD57-FC4F2851B446
 1770803052: Received PINGREQ from auto-89075646-6685-643B-FD57-FC4F2851B446
 1770803052: Sending PINGRESP to auto-89075646-6685-643B-FD57-FC4F2851B446
+1770803471: mosquitto version 2.0.22 starting
+1770803471: Config loaded from /mosquitto/config/mosquitto.conf.
+1770803471: Warning: File /mosquitto/config/passfile has world readable permissions. Future versions will refuse to load this file.
+To fix this, use `chmod 0700 /mosquitto/config/passfile`.
+1770803471: Opening ipv4 listen socket on port 1883.
+1770803471: Opening ipv6 listen socket on port 1883.
+1770803471: Opening ipv4 listen socket on port 8883.
+1770803471: Opening ipv6 listen socket on port 8883.
+1770803471: Opening websockets listen socket on port 9001.
+1770803471: mosquitto version 2.0.22 running
+1770803471: New connection from 172.18.0.3:48113 on port 1883.
+1770803471: New client connected from 172.18.0.3:48113 as auto-4751A734-5A99-A7DA-84E8-6E612E76EEE2 (p2, c1, k60, u'groupe3').
+1770803471: No will message specified.
+1770803471: Sending CONNACK to auto-4751A734-5A99-A7DA-84E8-6E612E76EEE2 (0, 0)
+1770803471: Received SUBSCRIBE from auto-4751A734-5A99-A7DA-84E8-6E612E76EEE2
+1770803471: 	campus/orion/sensors/# (QoS 0)
+1770803471: auto-4751A734-5A99-A7DA-84E8-6E612E76EEE2 0 campus/orion/sensors/#
+1770803471: Sending SUBACK to auto-4751A734-5A99-A7DA-84E8-6E612E76EEE2
