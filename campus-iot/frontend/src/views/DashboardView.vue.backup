@@ -13,7 +13,6 @@
       </v-chip>
     </div>
 
-    <!-- Grille des capteurs par étage -->
     <div v-if="floorGroups.length">
       <v-card
         v-for="floor in floorGroups"
@@ -76,88 +75,6 @@
       </p>
     </v-card>
 
-    <!-- KPI Cards Row -->
-    <v-row class="mb-6">
-      <v-col cols="12" lg="3">
-        <v-card color="surface" class="h-100">
-          <v-card-text>
-            <div class="d-flex align-center justify-space-between mb-3">
-              <div>
-                <div class="text-h4 font-weight-bold text-primary">
-                  {{ averageTemperature.toFixed(1) }}°C
-                </div>
-                <div class="text-caption text-medium-emphasis">Température moyenne</div>
-              </div>
-              <v-avatar size="56" color="primary" variant="tonal">
-                <v-icon size="28">mdi-thermometer</v-icon>
-              </v-avatar>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" lg="3">
-        <v-card color="surface" class="h-100">
-          <v-card-text>
-            <div class="d-flex align-center justify-space-between mb-3">
-              <div>
-                <div class="text-h4 font-weight-bold" :style="{ color: activityRate >= 80 ? '#4CAF50' : activityRate >= 50 ? '#FF9800' : '#F44336' }">
-                  {{ activityRate }}%
-                </div>
-                <div class="text-caption text-medium-emphasis">Activité capteurs</div>
-              </div>
-              <v-avatar size="56" :color="activityRate >= 80 ? 'success' : activityRate >= 50 ? 'warning' : 'error'" variant="tonal">
-                <v-icon size="28">mdi-pulse</v-icon>
-              </v-avatar>
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ activeRecentCount }}/{{ totalSensorsCount }} actifs
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" lg="3">
-        <v-card color="surface" class="h-100">
-          <v-card-text>
-            <div class="d-flex align-center justify-space-between mb-3">
-              <div>
-                <div class="text-h4 font-weight-bold text-success">
-                  {{ energyEnabledRate }}%
-                </div>
-                <div class="text-caption text-medium-emphasis">Mode éco</div>
-              </div>
-              <v-avatar size="56" color="success" variant="tonal">
-                <v-icon size="28">mdi-leaf</v-icon>
-              </v-avatar>
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              Économie : {{ savingsRate }}%
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" lg="3">
-        <v-card color="surface" class="h-100">
-          <v-card-text>
-            <div class="d-flex align-center justify-space-between mb-3">
-              <div>
-                <div class="text-h4 font-weight-bold" :style="{ color: alertCount > 0 ? '#F44336' : '#4CAF50' }">
-                  {{ alertCount }}
-                </div>
-                <div class="text-caption text-medium-emphasis">Alertes actives</div>
-              </div>
-              <v-avatar size="56" :color="alertCount > 0 ? 'error' : 'success'" variant="tonal">
-                <v-icon size="28">{{ alertCount > 0 ? 'mdi-bell-alert' : 'mdi-check-circle' }}</v-icon>
-              </v-avatar>
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ alertCount > 0 ? 'Voir les alertes' : 'Tout va bien' }}
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Graphique température + Alertes -->
     <v-row class="mb-6">
       <v-col cols="12" lg="8">
         <v-card color="surface" class="h-100">
@@ -187,7 +104,7 @@
             <v-icon start>mdi-bell-alert</v-icon>
             Alertes actives
             <v-spacer />
-            <v-chip size="small" :color="alertCount > 0 ? 'error' : 'success'" variant="tonal">
+            <v-chip size="small" color="error" variant="tonal">
               {{ alertCount }}
             </v-chip>
           </v-card-title>
@@ -216,7 +133,142 @@
       </v-col>
     </v-row>
 
-    <!-- Dialog configuration énergie -->
+    <v-row class="mb-6">
+      <v-col cols="12" lg="6">
+        <v-card color="surface" class="h-100">
+          <v-card-title class="d-flex align-center">
+            <v-icon start>mdi-radar</v-icon>
+            Activité capteurs
+            <v-spacer />
+            <v-btn-toggle v-model="chartPeriod" density="compact" variant="tonal" color="primary">
+              <v-btn value="1h">1h</v-btn>
+              <v-btn value="6h">6h</v-btn>
+              <v-btn value="24h">24h</v-btn>
+            </v-btn-toggle>
+            <v-chip size="small" color="primary" variant="tonal">
+              {{ activityRate }}%
+            </v-chip>
+          </v-card-title>
+          <v-card-text>
+            <apexchart
+              type="donut"
+              height="260"
+              :options="activityChartOptions"
+              :series="activityChartSeries"
+            ></apexchart>
+            <div class="d-flex justify-space-between mt-2 text-caption text-medium-emphasis">
+              <span>Actifs ({{ activeRecentCount }})</span>
+              <span>Inactifs ({{ inactiveRecentCount }})</span>
+            </div>
+            <div class="text-caption text-medium-emphasis mt-1">
+              Moyenne d’activité : {{ activityRate }}%
+            </div>
+            <div class="text-caption text-medium-emphasis mt-1">
+              Fenêtre d’activité : {{ activityWindowMinutes }} min
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" lg="6">
+        <v-card color="surface" class="h-100">
+          <v-card-title class="d-flex align-center">
+            <v-icon start>mdi-leaf</v-icon>
+            Économie d’énergie
+            <v-spacer />
+            <v-btn-toggle v-model="chartPeriod" density="compact" variant="tonal" color="primary">
+              <v-btn value="1h">1h</v-btn>
+              <v-btn value="6h">6h</v-btn>
+              <v-btn value="24h">24h</v-btn>
+            </v-btn-toggle>
+            <v-chip size="small" color="success" variant="tonal">
+              {{ energyEnabledRate }}%
+            </v-chip>
+          </v-card-title>
+          <v-card-text>
+            <apexchart
+              type="donut"
+              height="260"
+              :options="energyChartOptions"
+              :series="energyChartSeries"
+            ></apexchart>
+            <div class="d-flex justify-space-between mt-2 text-caption text-medium-emphasis">
+              <span>Éco actif ({{ energyEnabledCount }})</span>
+              <span>Normal ({{ energyDisabledCount }})</span>
+            </div>
+            <div class="text-caption text-medium-emphasis mt-1">
+              Moyenne éco : {{ energyEnabledRate }}%
+            </div>
+            <div class="text-caption text-medium-emphasis mt-1">
+              Consommation estimée : {{ consumptionRate }}%
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              Économie estimée : {{ savingsRate }}%
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <v-row class="mb-6">
+      <v-col cols="12">
+        <v-card color="surface" class="h-100">
+          <v-card-title class="d-flex align-center">
+            <v-icon start>mdi-chart-timeline-variant</v-icon>
+            Historique d’activité (mesures)
+            <v-spacer />
+            <v-chip size="small" color="primary" variant="tonal">
+              {{ chartPeriod }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text>
+            <apexchart
+              type="bar"
+              height="320"
+              :options="activityHistoryOptions"
+              :series="activityHistorySeries"
+            ></apexchart>
+            <div class="text-caption text-medium-emphasis mt-2">
+              Basé sur le nombre de mesures reçues par heure.
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <v-row class="mb-6">
+      <v-col cols="12">
+        <v-card color="surface" class="h-100">
+          <v-card-title class="d-flex align-center">
+            <v-icon start>mdi-chart-bar</v-icon>
+            Activité par type de capteur
+            <v-spacer />
+            <v-chip size="small" color="primary" variant="tonal">
+              {{ chartPeriod }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text>
+            <apexchart
+              type="bar"
+              height="320"
+              :options="activityTypeChartOptions"
+              :series="activityTypeChartSeries"
+            ></apexchart>
+            <div class="d-flex flex-wrap ga-2 mt-3">
+              <v-chip
+                v-for="item in activityTypePercentages"
+                :key="item.type"
+                size="small"
+                variant="tonal"
+                color="primary"
+              >
+                {{ item.label }} : {{ item.percent }}%
+              </v-chip>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
     <v-dialog v-model="energyDialog" max-width="600">
       <v-card color="surface">
         <v-card-title class="d-flex align-center">
@@ -355,6 +407,7 @@ import { storeToRefs } from 'pinia'
 import { useBuildingStore } from '@/stores/building'
 import { useAlertsStore } from '@/stores/alerts'
 import VueApexCharts from 'vue3-apexcharts'
+import axios from 'axios'
 
 const apexchart = VueApexCharts
 
@@ -399,6 +452,18 @@ const activityWindowMinutes = computed(() => {
     case '6h':
     default:
       return 360
+  }
+})
+
+const periodHours = computed(() => {
+  switch (chartPeriod.value) {
+    case '1h':
+      return 1
+    case '24h':
+      return 24
+    case '6h':
+    default:
+      return 6
   }
 })
 
@@ -448,31 +513,8 @@ const consumptionRate = computed(() => {
   return Math.round((sum / baseline) * 100)
 })
 
-const savingsRate = computed(() => {
-  const baseline = totalSensorsCount.value || 0
-  if (!baseline) return 0
-  
-  // Calcul de l'économie réelle basée sur les profils éco/nuit
-  const savings = buildingSensors.value.reduce((acc, sensor) => {
-    const setting = energySettings.value?.[sensor.id] || buildingStore.getEnergySetting(sensor.id)
-    if (!setting?.energy_enabled) return acc
-    
-    // Si mode éco actif, on économise selon le profil
-    const profileSaving = setting.profile === 'night' ? 0.6 : setting.profile === 'eco' ? 0.4 : 0
-    const intervalSaving = setting.disable_live ? 0.15 : 0
-    
-    return acc + (profileSaving + intervalSaving)
-  }, 0)
-  
-  return Math.round((savings / baseline) * 100)
-})
+const savingsRate = computed(() => Math.max(0, 100 - consumptionRate.value))
 
-const averageTemperature = computed(() => {
-  const tempSensors = buildingSensors.value.filter(s => s.type === 'temperature' && s.value !== null)
-  if (!tempSensors.length) return 0
-  const sum = tempSensors.reduce((acc, s) => acc + Number(s.value), 0)
-  return sum / tempSensors.length
-})
 
 const floorGroups = computed(() => {
   const roomsById = new Map(rooms.value.map(r => [r.id, r]))
@@ -526,6 +568,7 @@ watch(buildingSensors, (sensors) => {
 
 watch(chartPeriod, () => {
   generateChartData()
+  fetchActivityHistory()
 })
 
 function getSensorIcon(type) {
@@ -589,6 +632,66 @@ function isSensorActiveRecent(sensor) {
   const diffMs = Date.now() - last.getTime()
   return diffMs <= activityWindowMinutes.value * 60 * 1000
 }
+
+const activityHistorySeries = ref([{ name: 'Mesures', data: [] }])
+const activityHistoryCategories = ref([])
+
+const activityHistoryOptions = computed(() => ({
+  chart: { type: 'bar', toolbar: { show: false } },
+  colors: ['#60a5fa'],
+  plotOptions: { bar: { columnWidth: '60%' } },
+  dataLabels: { enabled: false },
+  xaxis: {
+    categories: activityHistoryCategories.value,
+    labels: { style: { colors: '#888' } },
+    title: { text: 'Heure', style: { color: '#888' } }
+  },
+  yaxis: {
+    labels: { style: { colors: '#888' } },
+    title: { text: 'Nombre de mesures', style: { color: '#888' } }
+  },
+  grid: { borderColor: 'rgba(255, 255, 255, 0.1)', strokeDashArray: 4 },
+  tooltip: { theme: 'dark' }
+}))
+
+async function fetchActivityHistory() {
+  const end = new Date()
+  const start = new Date(end.getTime() - periodHours.value * 60 * 60 * 1000)
+  const bucketCount = periodHours.value
+
+  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
+    time: new Date(start.getTime() + i * 60 * 60 * 1000),
+    count: 0
+  }))
+
+  try {
+    const response = await axios.get('/api/dashboard/stats', {
+      params: {
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        interval: '1h'
+      }
+    })
+
+    response.data.forEach((sensorStat) => {
+      sensorStat.data_points.forEach((point) => {
+        const t = new Date(point.time)
+        const index = Math.floor((t.getTime() - start.getTime()) / (60 * 60 * 1000))
+        if (index >= 0 && index < buckets.length) {
+          buckets[index].count += 1
+        }
+      })
+    })
+  } catch (e) {
+    console.error('Failed to fetch activity history:', e)
+  }
+
+  activityHistoryCategories.value = buckets.map(b =>
+    b.time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  )
+  activityHistorySeries.value = [{ name: 'Mesures', data: buckets.map(b => b.count) }]
+}
+
 
 function getSensorValueColor(sensor) {
   if (sensor?.type === 'presence') return sensor.value ? '#22c55e' : '#6b7280'
@@ -684,6 +787,160 @@ const chartOptions = computed(() => ({
 
 const chartSeries = computed(() => [{ name: 'Température', data: chartData.value }])
 
+const activityChartSeries = computed(() => [
+  activeRecentCount.value,
+  inactiveRecentCount.value
+])
+
+const activityChartOptions = computed(() => ({
+  chart: { type: 'donut' },
+  labels: ['Actifs', 'Inactifs'],
+  colors: ['#22c55e', '#94a3b8'],
+  legend: { position: 'bottom' },
+  dataLabels: {
+    enabled: true,
+    formatter: (val) => `${Math.round(val)}%`
+  },
+  tooltip: {
+    theme: 'dark',
+    y: {
+      formatter: (val, opts) => {
+        const total = opts?.globals?.seriesTotals?.reduce((a, b) => a + b, 0) || 0
+        const percent = total ? Math.round((val / total) * 100) : 0
+        return `${val} capteurs (${percent}%)`
+      }
+    }
+  },
+  plotOptions: {
+    pie: {
+      donut: {
+        size: '68%',
+        labels: {
+          show: true,
+          total: {
+            show: true,
+            label: 'Activité',
+            formatter: () => `${activityRate.value}%`
+          }
+        }
+      }
+    }
+  }
+}))
+
+const energyChartSeries = computed(() => [
+  energyEnabledCount.value,
+  energyDisabledCount.value
+])
+
+const energyChartOptions = computed(() => ({
+  chart: { type: 'donut' },
+  labels: ['Éco actif', 'Normal'],
+  colors: ['#10b981', '#f59e0b'],
+  legend: { position: 'bottom' },
+  dataLabels: {
+    enabled: true,
+    formatter: (val) => `${Math.round(val)}%`
+  },
+  tooltip: {
+    theme: 'dark',
+    y: {
+      formatter: (val, opts) => {
+        const total = opts?.globals?.seriesTotals?.reduce((a, b) => a + b, 0) || 0
+        const percent = total ? Math.round((val / total) * 100) : 0
+        return `${val} capteurs (${percent}%)`
+      }
+    }
+  },
+  plotOptions: {
+    pie: {
+      donut: {
+        size: '68%',
+        labels: {
+          show: true,
+          total: {
+            show: true,
+            label: 'Éco',
+            formatter: () => `${energyEnabledRate.value}%`
+          }
+        }
+      }
+    }
+  }
+}))
+
+const sensorTypeLabels = {
+  temperature: 'Température',
+  humidity: 'Humidité',
+  co2: 'CO2',
+  presence: 'Présence',
+  pressure: 'Pression',
+  light: 'Luminosité',
+  other: 'Autres'
+}
+
+const activityTypeChartSeries = computed(() => {
+  const types = [...sensorTypeOrder, 'other']
+  const activeByType = []
+  const inactiveByType = []
+
+  types.forEach((type) => {
+    const sensorsOfType = buildingSensors.value.filter(s => (s.type || 'other') === type)
+    const activeCount = sensorsOfType.filter(s => isSensorActiveRecent(s)).length
+    activeByType.push(activeCount)
+    inactiveByType.push(Math.max(sensorsOfType.length - activeCount, 0))
+  })
+
+  return [
+    { name: 'Actifs', data: activeByType },
+    { name: 'Inactifs', data: inactiveByType }
+  ]
+})
+
+const activityTypePercentages = computed(() => {
+  const types = [...sensorTypeOrder, 'other']
+  return types.map((type) => {
+    const sensorsOfType = buildingSensors.value.filter(s => (s.type || 'other') === type)
+    const activeCount = sensorsOfType.filter(s => isSensorActiveRecent(s)).length
+    const total = sensorsOfType.length
+    const percent = total ? Math.round((activeCount / total) * 100) : 0
+    return {
+      type,
+      label: sensorTypeLabels[type] || type,
+      percent
+    }
+  })
+})
+
+const activityTypeChartOptions = computed(() => ({
+  chart: { type: 'bar', stacked: true, toolbar: { show: false } },
+  colors: ['#22c55e', '#94a3b8'],
+  plotOptions: { bar: { horizontal: false, columnWidth: '55%' } },
+  dataLabels: { enabled: false },
+  xaxis: {
+    categories: [...sensorTypeOrder, 'other'].map(t => sensorTypeLabels[t] || t),
+    labels: { style: { colors: '#888' } },
+    title: { text: 'Types de capteurs', style: { color: '#888' } }
+  },
+  yaxis: {
+    labels: { style: { colors: '#888' } },
+    title: { text: 'Nombre de capteurs', style: { color: '#888' } }
+  },
+  legend: { position: 'bottom' },
+  grid: { borderColor: 'rgba(255, 255, 255, 0.1)', strokeDashArray: 4 },
+  tooltip: {
+    theme: 'dark',
+    y: {
+      formatter: (val, opts) => {
+        const totals = opts?.globals?.stackedSeriesTotals
+        const total = totals ? totals[opts.dataPointIndex] : 0
+        const percent = total ? Math.round((val / total) * 100) : 0
+        return `${val} capteurs (${percent}%)`
+      }
+    }
+  }
+}))
+
 function isEcoActive(sensorId) {
   const setting = buildingStore.getEnergySetting(sensorId)
   return Boolean(setting.energy_enabled || setting.schedule_enabled)
@@ -733,6 +990,7 @@ async function saveEnergySettings() {
 
 onMounted(() => {
   generateChartData()
+  fetchActivityHistory()
 })
 </script>
 
@@ -833,3 +1091,4 @@ onMounted(() => {
   }
 }
 </style>
+

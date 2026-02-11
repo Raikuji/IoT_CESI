@@ -98,14 +98,28 @@ export const useAlertsStore = defineStore('alerts', () => {
 
   async function acknowledgeAlert(alertId) {
     try {
-      await axios.post(`/api/alerts/${alertId}/ack`)
-      const alert = alerts.value.find(a => a.id === alertId)
-      if (alert) {
-        alert.is_acknowledged = true
-        alert.acknowledged_at = new Date().toISOString()
+      const response = await axios.post(`/api/alerts/${alertId}/ack`)
+      console.log('Alert acknowledged:', response.data)
+      
+      // Mettre à jour l'alerte avec les données du backend
+      const index = alerts.value.findIndex(a => a.id === alertId)
+      if (index !== -1) {
+        alerts.value[index] = response.data
       }
+      
+      // Forcer la réactivité en recréant le tableau
+      alerts.value = [...alerts.value]
+      
+      // IMPORTANT : Mettre à jour le cache localStorage
+      localStorage.setItem(cacheKey, JSON.stringify({
+        alerts: alerts.value,
+        cachedAt: new Date().toISOString()
+      }))
+      
+      return { success: true }
     } catch (e) {
       console.error('Failed to acknowledge alert:', e)
+      return { success: false, error: e.response?.data?.detail || e.message }
     }
   }
 
@@ -113,9 +127,17 @@ export const useAlertsStore = defineStore('alerts', () => {
     try {
       await axios.post('/api/alerts/ack-all')
       alerts.value.forEach(a => {
-        a.is_acknowledged = true
-        a.acknowledged_at = new Date().toISOString()
+        if (!a.is_acknowledged) {
+          a.is_acknowledged = true
+          a.acknowledged_at = new Date().toISOString()
+        }
       })
+      
+      // IMPORTANT : Mettre à jour le cache localStorage
+      localStorage.setItem(cacheKey, JSON.stringify({
+        alerts: alerts.value,
+        cachedAt: new Date().toISOString()
+      }))
     } catch (e) {
       console.error('Failed to acknowledge all alerts:', e)
     }

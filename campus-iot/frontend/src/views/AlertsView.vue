@@ -159,14 +159,13 @@
 
                   <template v-slot:item.actions="{ item }">
                     <v-btn
-                      icon
-                      variant="text"
+                      variant="tonal"
                       size="small"
                       color="success"
+                      prepend-icon="mdi-check-circle"
                       @click="acknowledge(item.id)"
                     >
-                      <v-icon>mdi-check</v-icon>
-                      <v-tooltip activator="parent">Acquitter</v-tooltip>
+                      Acquitter
                     </v-btn>
                   </template>
                 </v-data-table>
@@ -710,12 +709,19 @@ function scrollToForm() {
   }
 }
 
-function acknowledge(id) {
-  alertsStore.acknowledgeAlert(id)
+async function acknowledge(id) {
+  const result = await alertsStore.acknowledgeAlert(id)
+  
+  if (!result.success) {
+    console.error('Failed to acknowledge:', result.error)
+  }
+  // Pas besoin de refetch : le store met déjà à jour l'alerte localement
 }
 
-function acknowledgeAll() {
-  alertsStore.acknowledgeAll()
+async function acknowledgeAll() {
+  await alertsStore.acknowledgeAll()
+  // Petit délai pour laisser le backend commiter, puis refresh
+  setTimeout(() => alertsStore.fetchAlerts(), 300)
 }
 
 function refresh() {
