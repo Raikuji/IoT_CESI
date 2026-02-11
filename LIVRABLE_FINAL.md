@@ -1,144 +1,451 @@
-# LIVRABLE FINAL - Campus IoT CESI Nancy
-## Documentation complète : Architecture, choix techniques et modes d'emploi
+# LIVRABLE FINAL - Projet IoT Campus CESI Nancy
+## Réseau de capteurs sans fil ZigBee avec supervision MQTT
 
-**Date** : 10 février 2026  
-**Projet** : IoT Campus Intelligent 
+**Date** : 11 février 2026  
+**Projet** : Système de monitoring environnemental par réseau de capteurs IoT
 **Établissement** : CESI Nancy  
-**Version** : 1.0  
 **Dépôt Git** : https://github.com/Raikuji/IoT_CESI
 
----
+## Sommaire
 
-## 📋 Table des matières
+Ce livrable contient les éléments suivants conformément aux exigences :
 
-1. [Architecture complète de la chaîne IoT](#-architecture-complète-de-la-chaîne-iot)
-2. [Justification des choix techniques](#-justification-des-choix-techniques)
-3. [Limites et performances attendues](#-limites-et-performances-attendues)
-4. [Guide utilisateur - Administrateur](#-guide-utilisateur---administrateur)
-5. [Guide utilisateur - Usager standard](#-guide-utilisateur---usager-standard)
-6. [Guide utilisateur - IoT & Hardware](#-guide-utilisateur---iot--hardware)
+### 1. [CODE DU PROJET (commenté)](#1-code-du-projet-commenté)
+   - Code Arduino Gateway Coordinator
+   - Code Arduino End Device
+   - Code Bridge MQTT Python
+   - Bibliothèques de sécurité HMAC
 
----
+### 2. [ARCHITECTURE IoT COMPLÈTE](#2-architecture-iot-complète)
+   - Schéma d'architecture de la chaîne IoT
+   - Schéma électrique détaillé
+   - Justification des choix techniques
+   - Limites et performances attendues
 
-## 🏗️ Architecture complète de la chaîne IoT
+### 3. [DOCUMENTATION UTILISATEUR](#3-documentation-utilisateur)
+   - Guide d'installation hardware
+   - Guide de configuration XBee
+   - Guide d'utilisation et supervision
+   - Guide de dépannage
 
-### Schéma global
+# 1. CODE DU PROJET (commenté)
+
+**Dépôt GitHub** : https://github.com/Raikuji/IoT_CESI
+
+Le code source complet du projet est disponible sur le dépôt GitHub ci-dessus. Il contient :
+
+## Structure du code
+
+```
+campus-iot/firmware/
+├── gateway/
+│   ├── gateway.ino              # Arduino Mega Coordinator (commenté)
+│   └── mqtt_bridge.py           # Bridge Python MQTT (commenté)
+├── transmitter_bme280/
+│   └── transmitter_bme280.ino   # End Device capteur température
+├── transmitter_ultrasonic/
+│   └── transmitter_ultrasonic.ino # End Device capteur présence
+├── transmitter_potentiometer/
+│   └── transmitter_potentiometer.ino # End Device CO2 simulé
+├── actuator_motor/
+│   └── actuator_motor.ino       # Test moteur standalone
+├── actuator_speaker/
+│   └── actuator_speaker.ino     # Test buzzer standalone
+└── lib/
+    └── hmac_security.h          # Bibliothèque HMAC-SHA256
+```
+
+## Fichiers principaux
+
+### 1.1 Gateway Coordinator (`gateway.ino`)
+- **Rôle** : Coordinateur ZigBee central
+- **Fonctions** :
+  - Lecture capteurs locaux (BME280, HC-SR04, potentiomètre)
+  - Réception données End Devices via XBee
+  - Formatage JSON avec authentification HMAC
+  - Envoi via Serial USB vers Bridge Python
+  - Contrôle actionneurs (moteur DC, buzzer)
+- **Lignes de code** : ~350 lignes commentées
+
+### 1.2 End Device (`transmitter_bme280.ino`)
+- **Rôle** : Nœud capteur autonome
+- **Fonctions** :
+  - Lecture BME280 (température, humidité, pression)
+  - Formatage JSON + HMAC
+  - Transmission ZigBee vers Coordinator
+- **Lignes de code** : ~100 lignes commentées
+
+### 1.3 Bridge MQTT (`mqtt_bridge.py`)
+- **Rôle** : Passerelle IoT ↔ IT
+- **Fonctions** :
+  - Lecture série USB depuis Arduino
+  - Validation HMAC
+  - Publication MQTT (QoS 1, retained)
+  - Souscription commandes actionneurs
+  - Reconnexion automatique
+- **Lignes de code** : ~200 lignes commentées
+
+### 1.4 Bibliothèque sécurité (`hmac_security.h`)
+- **Rôle** : Authentification messages ZigBee
+- **Algorithme** : HMAC-SHA256
+- **Fonction principale** : `String computeHMAC(payload, secret)`
+- **Usage** : Protection contre spoofing et corruption
+
+## Installation du code
+
+```bash
+# Cloner le dépôt
+git clone https://github.com/Raikuji/IoT_CESI.git
+cd IoT_CESI/campus-iot/firmware
+
+# Compiler et flasher Arduino (via Arduino IDE)
+# Fichier → Ouvrir → gateway/gateway.ino
+# Outils → Carte → Arduino Mega 2560
+# Outils → Port → /dev/ttyACM0
+# Croquis → Téléverser
+
+# Installer dépendances Python Bridge
+pip install pyserial paho-mqtt
+
+# Lancer le bridge
+python gateway/mqtt_bridge.py
+```
+
+## Commentaires et documentation
+
+Tous les fichiers `.ino` et `.py` contiennent :
+- **En-tête** : Description, auteur, date, matériel
+- **Commentaires de fonctions** : Paramètres, return, usage
+- **Commentaires inline** : Explication logique complexe
+- **Constantes documentées** : Pins, timings, adresses
+
+## Architecture complète de la chaîne IoT
+
+### Vue d'ensemble du système
+
+Le projet consiste en un **réseau de capteurs sans fil** déployé dans le bâtiment Orion du campus CESI Nancy. L'objectif est de collecter des données environnementales (température, humidité, pression, présence, CO2) via des capteurs autonomes communiquant en ZigBee, et de centraliser ces données via un protocole MQTT pour supervision et contrôle d'actionneurs.
+
+### Schéma d'architecture matérielle
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      CAPTEURS IOT (Bâtiment Orion)                  │
+│                   COUCHE CAPTEURS (End Devices)                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│  • BME280 (Température, Humidité, Pression)                         │
-│  • HC-SR04 (Distance/Présence)                                      │
-│  • Potentiomètre (CO2 simulé, 0-1023 ADC)                           │
-│  Optionnel: MQ-135 (CO2 réel)                                       │
-│  Connectivité: Serial (I2C, GPIO, ADC) → Arduino Mega              │
+│  NŒUD 1: Salle X101                                                 │
+│  ├─ BME280: Temp/Humid/Press (I2C 0x76)                             │
+│  ├─ HC-SR04: Présence ultrason (GPIO Trig/Echo)                     │
+│  ├─ Potentiomètre: CO2 simulé (ADC A0, 0-1023 → 0-2000 ppm)        │
+│  └─ Arduino UNO + XBee End Device                                   │
+│                                                                      │
+│  NŒUD 2: Salle X102                                                 │
+│  ├─ BME280: Temp/Humid/Press                                        │
+│  ├─ MQ-135: CO2 réel (ADC A1, calibration requis)                   │
+│  └─ Arduino UNO + XBee End Device                                   │
+│                                                                      │
+│  NŒUD N: Extensible jusqu'à 65 000 nœuds (limite théorique ZigBee) │
+│  Alimentation: USB 5V ou batterie Li-Ion 3.7V (autonomie ~7j)       │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
-                             │ Liaison série USB (9600 baud)
+                             │ ZigBee Mesh Network (IEEE 802.15.4)
+                             │ • Fréquence: 2.4 GHz (Canal 15)
+                             │ • Débit: 250 kbps
+                             │ • Portée: ~30m indoor / ~100m outdoor
+                             │ • Topologie: Mesh auto-cicatrisante
+                             │ • Sécurité: HMAC-SHA256 sur payload
                              │
 ┌────────────────────────────▼────────────────────────────────────────┐
-│              GATEWAY ARDUINO (Collecteur local)                      │
+│                  GATEWAY COORDINATOR (Hub Central)                  │
 ├─────────────────────────────────────────────────────────────────────┤
-│  • Arduino Mega 2560                                                │
-│  • XBee Series 2 Coordinator (ZigBee)                               │
-│  • Actionneurs: Moteur DC + Speaker                                 │
-│  Rôle: Agréger les capteurs locaux, recevoir/envoyer via XBee      │
+│  HARDWARE:                                                           │
+│  ├─ Arduino Mega 2560 (16 MHz, 256KB Flash, 8KB RAM)               │
+│  ├─ XBee Series 2 Coordinator (Module ZigBee coordinateur)          │
+│  ├─ Shield XBee officiel Digi (Serial UART mapping)                 │
+│  └─ Capteurs locaux (identiques aux End Devices)                    │
+│                                                                      │
+│  ACTIONNEURS INTÉGRÉS:                                               │
+│  ├─ Moteur DC 12V (Ventilation/Volets)                              │
+│  │  └─ Pilotage: PWM Pin 5 → Driver L298N → Relay                  │
+│  └─ Buzzer piézo/Speaker (Alarme sonore)                            │
+│     └─ Pilotage: PWM Pin 6 → Transistor NPN                         │
+│                                                                      │
+│  RÔLE:                                                               │
+│  • Agréger les données des End Devices via XBee                     │
+│  • Lire les capteurs locaux via I2C/GPIO/ADC                        │
+│  • Formater les données en JSON                                     │
+│  • Envoyer via liaison série USB à la Gateway Application           │
+│  • Recevoir commandes actionneurs depuis Gateway Application        │
+│                                                                      │
+│  PROTOCOLE SÉRIE:                                                    │
+│  • Baud rate: 9600 baud                                             │
+│  • Format: JSON sur ligne unique terminée par \n                    │
+│  • Exemple émis: {"room":"X101","type":"temp","value":23.5,"ts":..} │
+│  • Exemple reçu: {"cmd":"motor","value":150}                        │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
-                             │ ZigBee Mesh (250 kbps, ~30m indoor)
+                             │ Liaison série USB (UART)
+                             │ • Port: /dev/ttyACM0 (Linux) ou COM3 (Win)
+                             │ • 9600 baud, 8N1
                              │
 ┌────────────────────────────▼────────────────────────────────────────┐
-│                   CAPTEURS XBEE (End Devices)                       │
+│               GATEWAY APPLICATION (Bridge IoT ↔ IT)                 │
 ├─────────────────────────────────────────────────────────────────────┤
-│  • XBee Series 2 (Router/End Device)                                │
-│  • Capteurs additionnels (BME280, HC-SR04, etc)                     │
-│  Rôle: Capturer et transmettre au Coordinator                       │
+│  PLATEFORME: PC/Raspberry Pi sous Linux/Windows                     │
+│                                                                      │
+│  LOGICIEL: mqtt_bridge.py (Python 3.10+)                            │
+│  ├─ Dépendances: pyserial, paho-mqtt                                │
+│  ├─ Lecture série asynchrone (buffer ligne)                         │
+│  ├─ Parse JSON et validation                                        │
+│  ├─ Publication MQTT sur topics structurés                          │
+│  └─ Souscription MQTT pour commandes actionneurs                    │
+│                                                                      │
+│  FONCTIONNALITÉS:                                                    │
+│  • Parsing des trames capteurs → Publish MQTT                       │
+│  • Écoute topics actionneurs → Envoi série Arduino                  │
+│  • Gestion erreurs: reconnexion auto, buffer overflow               │
+│  • Logs horodatés (stdout + fichier optionnel)                      │
+│  • CLI interactive: commandes manuelles moteur/speaker              │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
-                             │ Bridge Python (mqtt_bridge.py)
+                             │ MQTT over TCP/IP
+                             │ • Port: 1883 (TCP) ou 8883 (TLS/SSL)
+                             │ • QoS: 1 (at least once delivery)
+                             │ • Protocol: MQTT v3.1.1
                              │
 ┌────────────────────────────▼────────────────────────────────────────┐
-│                    GATEWAY APPLICATION (PC/Server)                  │
+│                    BROKER MQTT (Message Hub)                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  • Script Python mqtt_bridge.py                                     │
-│  • Lit les données série de l'Arduino                               │
-│  • Formate et publie sur MQTT                                       │
-│  • Écoute les commandes MQTT pour actionneurs                       │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                   MQTT over TCP/IP (port 1883)
-                   
-┌─────────────────────────────────────────────────────────────────────┐
-│                       MOSQUITTO BROKER                              │
-├─────────────────────────────────────────────────────────────────────┤
-│  Port 1883 : MQTT TCP                                               │
-│  Port 9001 : MQTT WebSocket (pour frontend)                         │
-│  Topics:                                                             │
-│    • campus/orion/sensors/{type}     → Données capteurs             │
-│    • campus/orion/actuators/{device} → Commandes actionneurs        │
-│    • campus/orion/controls/energy/*  → Config énergie               │
+│  LOGICIEL: Eclipse Mosquitto 2.0                                    │
+│  • Conteneurisé: Docker image officielle                            │
+│  • Persistance: Volume Docker pour QoS/Retained messages            │
+│  • Authentification: Username/Password (fichier passwd)             │
+│  • Chiffrement: TLS/SSL optionnel (certificats Let's Encrypt)       │
+│                                                                      │
+│  TOPICS MQTT (Hiérarchie):                                          │
+│  • campus/orion/sensors/temperature    → Données temp               │
+│  • campus/orion/sensors/humidity       → Données humid              │
+│  • campus/orion/sensors/pressure       → Données press              │
+│  • campus/orion/sensors/co2            → Données CO2                │
+│  • campus/orion/sensors/distance       → Présence ultrason          │
+│  • campus/orion/actuators/motor        → Commandes moteur           │
+│  • campus/orion/actuators/speaker      → Commandes alarme           │
+│  • campus/orion/system/status          → Heartbeat/santé système    │
+│                                                                      │
+│  PORTS:                                                              │
+│  • 1883: MQTT TCP (backend + bridge)                                │
+│  • 9001: MQTT WebSocket (frontend temps réel)                       │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
         ┌────────────────────┴────────────────────┐
         │                                         │
-    HTTP/REST                              WebSocket
+    Subscription                           WebSocket (optionnel)
         │                                         │
-┌───────▼──────────────────┐    ┌────────────────▼──────────┐
-│   BACKEND API (FastAPI)  │    │  FRONTEND (Vue 3)         │
-├──────────────────────────┤    ├───────────────────────────┤
-│ • Endpoints REST         │    │ • Dashboard temps réel    │
-│ • WebSocket connexion    │    │ • Alertes live            │
-│ • Client MQTT            │    │ • Admin panel             │
-│ • Logique métier         │    │ • Contrôle actionneurs    │
-│ • Validation données     │    │ • Export rapports         │
-└───────┬──────────────────┘    └───────────────────────────┘
-        │
-        │ TCP (port 5432)
-        │
-┌───────▼──────────────────────────────────────┐
-│    PostgreSQL Database (Supabase Cloud)      │
-├────────────────────────────────────────────────┤
-│ • TimescaleDB (time-series)                  │
-│ • Tables: sensors, alerts, users, logs...    │
-│ • Stockage persistant des mesures            │
-└────────────────────────────────────────────────┘
+┌───────▼──────────────────┐    ┌────────────────▼──────────────────┐
+│   BACKEND API            │    │  SUPERVISION WEB (Dashboard)      │
+│   (Persistance)          │    │  (Optionnel - Interface humaine)  │
+├──────────────────────────┤    ├───────────────────────────────────┤
+│ • FastAPI (Python)       │    │ • Vue.js 3 SPA                    │
+│ • Client MQTT async      │    │ • Connexion MQTT WebSocket        │
+│ • Stockage PostgreSQL    │    │ • Graphiques temps réel           │
+│ • TimescaleDB extension  │    │ • Contrôle actionneurs manuel     │
+│ • Endpoints REST         │    │ • Visualisation historiques       │
+└──────────────────────────┘    └───────────────────────────────────┘
 ```
 
-### Flux de données
+### Flux de données détaillé
 
-**Scénario 1 : Capteur → Dashboard**
-
-```
-1. BME280 mesure température → Arduino Mega
-2. Arduino Mega lit via I2C → Serie USB
-3. Bridge Python lit série → Parse JSON
-4. Bridge publie MQTT "campus/orion/sensors/temperature"
-5. Backend s'abonne aux topics MQTT
-6. Backend reçoit et enregistre en BDD
-7. Frontend connecté en WebSocket reçoit notification
-8. Dashboard affiche la donnée en temps réel
-```
-
-**Latence totale estimée : < 2 secondes**
-
-**Scénario 2 : Commande actionneur (via API)**
+#### Scénario 1 : Mesure capteur → Supervision
 
 ```
-1. Admin web clique "Démarrer moteur"
-2. Frontend POST /api/actuators/motor/command
-3. Backend valide et publie MQTT "campus/orion/actuators/motor"
-4. Bridge Python reçoit le message MQTT
-5. Bridge envoie commande à Arduino via série
-6. Arduino contrôle le relay → Moteur démarre
-7. Backend confirme à Frontend (200 OK)
+┌──────────┐
+│ Capteur  │ BME280 mesure température = 23.5°C
+│ BME280   │ ↓
+└─────┬────┘ Lecture I2C par Arduino (Wire.begin(), 0x76)
+      │      ↓
+┌─────▼────┐ Arduino End Device formate:
+│ Arduino  │ {"room":"X101","type":"temp","value":23.5,"ts":1707645600}
+│ + XBee   │ ↓
+└─────┬────┘ Transmission ZigBee (Broadcast vers Coordinator)
+      │      • Payload: ~60 bytes
+      │      • Latence: ~50-100ms (mesh hop count × 20ms)
+      │      ↓
+┌─────▼────────┐
+│ Coordinator  │ XBee Coordinator reçoit trame ZigBee
+│ Arduino Mega │ ↓
+└─────┬────────┘ Arduino Mega transfère via Serial.println()
+      │          ↓
+┌─────▼──────────┐
+│ mqtt_bridge.py │ Lecture ligne série (readline() bloquant)
+│ (Python)       │ ↓
+└─────┬──────────┘ Parse JSON, validation, ajout métadonnées
+      │            ↓
+┌─────▼────────┐
+│ Mosquitto    │ Publish sur "campus/orion/sensors/temperature"
+│ (MQTT Broker)│ • QoS 1 (garantie livraison)
+└─────┬────────┘ • Retained message (dernier état disponible)
+      │          ↓
+      ├──────────→ Backend subscribes → Stockage BDD (historique)
+      │          ↓
+      └──────────→ Frontend WebSocket → Affichage Dashboard live
+
+Latence totale estimée: 200-500 ms (bout en bout)
 ```
 
-**Latence totale estimée : < 1 seconde**
+#### Scénario 2 : Commande actionneur
 
-### Justification des choix techniques
+```
+┌───────────┐
+│ Utilisateur│ Clique "Démarrer moteur vitesse 150"
+└─────┬─────┘
+      │ HTTP POST /api/actuators/motor {"value":150}
+      ↓
+┌─────▼────────┐
+│ Backend API  │ Validation + Log + Publish MQTT
+└─────┬────────┘ → Topic: "campus/orion/actuators/motor"
+      │          → Payload: {"room":"X101","value":150}
+      ↓
+┌─────▼────────┐
+│ Mosquitto    │ Broadcast vers subscribers
+└─────┬────────┘
+      │
+┌─────▼──────────┐
+│ mqtt_bridge.py │ Callback on_message() triggered
+│                │ ↓
+└─────┬──────────┘ Formate commande série: {"cmd":"motor","value":150}\n
+      │            ↓
+┌─────▼────────┐
+│ Arduino Mega │ Serial.available() → parse JSON
+│ Coordinator  │ ↓
+└─────┬────────┘ analogWrite(MOTOR_PIN, 150); // PWM duty cycle
+      │          ↓
+┌─────▼────┐
+│ Driver   │ L298N driver contrôle Relay → Moteur 12V tourne
+│ L298N    │ • Vitesse proportionnelle: 150/255 ≈ 59% duty
+└──────────┘
 
-#### 1. **Communication capteurs locaux : I2C/GPIO + Arduino Mega**
+Latence totale estimée: 100-300 ms (clic → action physique)
+```
+
+### Schéma électrique simplifié (Gateway Coordinator)
+
+```
+                    Arduino Mega 2560
+                   ┌─────────────────┐
+                   │                 │
+   BME280 ─────────┤ SDA(20) SCL(21) │ (I2C Bus)
+   (0x76)          │                 │
+                   │ A0 ←───────────┐│ Potentiomètre CO2 (0-1023)
+                   │                 │
+   HC-SR04         │ Pin 7 (Trig)    │
+   Ultrasonic ─────┤ Pin 8 (Echo)    │
+                   │                 │
+                   │ Pin 5 (PWM) ────┼──→ L298N IN1 ──→ Relay ──→ Moteur 12V
+                   │                 │
+                   │ Pin 6 (PWM) ────┼──→ NPN Base ──→ Buzzer/Speaker
+                   │                 │
+   XBee Shield     │ Serial1 RX/TX   │ (XBee Coordinator)
+                   │                 │
+   USB ────────────┤ USB Port        │──→ PC/Raspberry (Serial 9600)
+                   │                 │
+   5V Adapter ─────┤ Vin (7-12V)     │ (Alimentation externe si actionneurs)
+                   └─────────────────┘
+
+Notes:
+- XBee alimenté par shield (3.3V régulateur intégré)
+- Moteur 12V nécessite alimentation externe (pas USB)
+- Driver L298N isole logique 5V de puissance 12V
+- Buzzer via transistor NPN pour amplification courant
+```
+
+## Justification des choix techniques IoT
+
+### 1. **Microcontrôleurs : Arduino Mega 2560 vs Arduino UNO**
+
+| Aspect | Arduino UNO | Arduino Mega 2560 | Choix final |
+|--------|-------------|-------------------|-------------|
+| **Mémoire Flash** | 32 KB | 256 KB | **Mega** : nécessaire pour XBee + capteurs + HMAC |
+| **RAM** | 2 KB | 8 KB | **Mega** : évite overflow avec buffers JSON |
+| **Ports série** | 1 (USB) | 4 (USB + 3 UART) | **Mega** : XBee sur Serial1, USB Serial0 |
+| **Pins I2C** | 1 bus | 2 bus | **Mega** : un bus par End Device si extension |
+| **Prix** | ~20€ | ~35€ | **Mega** : +15€ justifiés par capacités |
+| **Compatibilité** | UNO pour End Devices simples | Mega pour Gateway | **Hybride** optimal |
+
+**Décision** : Arduino Mega 2560 pour Gateway Coordinator, Arduino UNO pour End Devices simples (économie).
+
+### 2. **Capteurs : Choix et justifications**
+
+#### BME280 (Température/Humidité/Pression)
+
+| Critère | BME280 | DHT22 | Justification |
+|---------|--------|-------|---------------|
+| **Précision temp** | ±0.5°C | ±0.5°C | Équivalent |
+| **Précision humid** | ±3% HR | ±2% HR | DHT légèrement meilleur |
+| **Interface** | I2C/SPI | 1-Wire | **BME280** : I2C = multi-capteurs même bus |
+| **Consommation** | 3.6 µA idle | 0.15 mA idle | **BME280** : 40x moins consommateur |
+| **Temps réponse** | 1 s | 2 s | **BME280** : 2x plus rapide |
+| **Pression baro** | Oui (300-1100 hPa) | Non | **BME280** : 3-en-1 |
+| **Prix** | ~8€ | ~5€ | **BME280** : +3€ pour 3 capteurs |
+
+**Décision** : BME280 pour ratio précision/consommation/fonctionnalités.
+
+#### HC-SR04 (Ultrasons présence/distance)
+
+| Critère | HC-SR04 | PIR (infrarouge) | Justification |
+|---------|---------|------------------|---------------|
+| **Portée** | 2 cm - 4 m | 5-12 m | **HC-SR04** : distance précise (PIR binaire) |
+| **Angle détection** | 15° (faisceau) | 110° (large) | **PIR** meilleur couverture |
+| **Consommation** | 15 mA | 50 µA | **PIR** ultra-économe |
+| **Faux positifs** | Rares (ultrason) | Fréquents (chaleur) | **HC-SR04** : plus fiable |
+| **Prix** | ~2€ | ~3€ | **HC-SR04** : moins cher |
+| **Donnée** | Distance (cm) | Booléen (présence/absence) | **HC-SR04** : plus riche |
+
+**Décision** : HC-SR04 pour données de distance exploitables (comptage, occupation précise).
+
+#### Potentiomètre vs MQ-135 (CO2)
+
+| Critère | Potentiomètre | MQ-135 (réel) | Justification |
+|---------|---------------|---------------|---------------|
+| **Précision** | N/A (simulé) | ±50 ppm | **MQ-135** meilleur |
+| **Calibration** | Aucune | Complexe (48h warm-up) | **Pot** : simple, rapide |
+| **Consommation** | 0 mA | 150 mA (heating) | **Pot** : économique |
+| **Prix** | ~1€ | ~5€ | **Pot** : 5x moins cher |
+| **Temps réel** | Instantané | Délai 10-30 s | **Pot** : réactif |
+| **MVP/Démo** | Suffisant | Overkill | **Pot** : adapté phase 1 |
+
+**Décision** : Potentiomètre en phase 1 (MVP), migration vers MQ-135 en phase 2 si besoin réel.
+
+### 3. **Communication sans fil : ZigBee (XBee Series 2)**
+
+#### Comparaison protocoles IoT
+
+| Protocole | Portée | Débit | Conso idle | Topologie | Coût module | Justification |
+|-----------|--------|-------|------------|-----------|-------------|---------------|
+| **ZigBee** | 30m / 100m | 250 kbps | 1 µA | Mesh | ~30€ | ✅ Optimal indoor |
+| **WiFi 802.11** | 50m / 100m | 54 Mbps | 80 mA | Star | ~5€ | ❌ Trop gourmand |
+| **LoRaWAN** | 2 km / 15 km | 0.3-50 kbps | 1.5 µA | Star | ~20€ | ❌ Trop lent |
+| **Bluetooth Low Energy** | 10m / 50m | 1 Mbps | 1 µA | Star/Mesh | ~8€ | ❌ Portée limitée |
+| **Z-Wave** | 30m / 100m | 100 kbps | 0.5 µA | Mesh | ~35€ | ❌ Propriétaire |
+| **Thread** | 30m / 100m | 250 kbps | 1 µA | Mesh | ~25€ | ⚠️ Émergent |
+
+**Pourquoi ZigBee gagne :**
+
+1. **Mesh auto-cicatrisante** : Si un routeur tombe, le réseau se reconfigure automatiquement
+2. **Consommation faible** : End Device en sleep mode = autonomie batterie ~7 jours
+3. **Portée adaptée bâtiment** : 30m indoor avec murs béton, extensible via routeurs
+4. **Débit suffisant** : 250 kbps >> nos besoins (~500 bits/msg × 1 msg/min = 8 bps)
+5. **Standard industriel** : IEEE 802.15.4, bibliothèques Arduino matures
+6. **Scalabilité** : Jusqu'à 65 000 nœuds par réseau (théorique)
+
+**Pourquoi pas WiFi :**
+- Consommation 80 mA idle vs 1 µA ZigBee = autonomie batterie impossible
+- Bâtiments béton = atténuation excessive = dead zones
+- Nécessite infrastructure (routeurs, DHCP) = coûts
+
+**Pourquoi pas LoRaWAN :**
+- Optimisé longue portée (km) = overkill pour bâtiment
+- Débit trop faible (0.3 kbps) = latence excessive
+- Topologie star = pas de résilience
+
+### 4. **Communication locale : I2C vs SPI vs 1-Wire**
 
 | Aspect | Choix | Justification |
 |--------|-------|---------------|
@@ -220,7 +527,7 @@
 
 ---
 
-## 📊 Limites et performances attendues
+## Limites et performances attendues
 
 ### Performances nominales
 
@@ -301,7 +608,7 @@
 ```
 URL: http://localhost/admin
 Identifiants: admin@cesi.fr / admin123 (par défaut)
-⚠️ CHANGER le mot de passe initial immédiatement
+CHANGER le mot de passe initial immédiatement
 ```
 
 ### 2. Première connexion - Setup initial
@@ -477,9 +784,7 @@ Cliquer sur profil (haut droit) → Préférences
 
 Cliquer profil (haut droit) → Déconnexion
 
----
-
-## 🛠️ Guide utilisateur - IoT & Hardware
+## Guide utilisateur - IoT & Hardware
 
 ### 1. Composants et câblage
 
@@ -722,35 +1027,3 @@ curl -X POST http://localhost:8000/api/actuators/motor/command \
 - [ ] Dashboard affiche données temps réel
 - [ ] Actionneurs réagissent aux commandes
 
----
-
-## 📞 Support & Contacts
-
-**Dépôt du projet** :
-- GitHub: https://github.com/Raikuji/IoT_CESI
-- Cloner: `git clone https://github.com/Raikuji/IoT_CESI.git`
-- Issues & PRs: https://github.com/Raikuji/IoT_CESI/issues
-
-**Problèmes logiciels** :
-- Frontend: Voir console navigateur (F12)
-- Backend: Logs Docker (`docker compose logs backend`)
-- Base de données: Dashboard Supabase
-
-**Problèmes hardware** :
-- Arduino: XCTU Network Viewer, moniteur série
-- XBee: Vérifier XCTU firmware version, PAN ID/Channel
-- Capteurs: Tester code Arduino isolé, vérifier alimentation
-
-**Documentation supplémentaire** :
-- [README.md](README.md) : Guide d'installation général
-- [DOCUMENTATION_IOT.md](DOCUMENTATION_IOT.md) : Guide hardware détaillé
-- [architecture_iot.puml](architecture_iot.puml) : Schéma PlantUML
-- Swagger API : http://localhost:8000/docs
-- XCTU Help : Intégré dans l'application
-
----
-
-**Version** : 1.0  
-**Date** : 10 février 2026  
-**Auteurs** : Groupe 3 FISA INFO 2024-2027 (CESI Nancy)  
-**Licence** : MIT
