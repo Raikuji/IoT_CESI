@@ -40,13 +40,17 @@ const int HMAC_SIZE = 32;
 #define REG_CALIB_DIG_H1 0xA1
 #define REG_CALIB_DIG_H2 0xE1
 
+const int activeTime = 6000;
+const int sleepTime = 60000;
+int loopTime = activeTime;
+int counterEmpty = 0;
+
 // ==========================================
 //           NETWORK & MQTT SETTINGS
 // ==========================================
 const char ssid[] = "CESI_Iot";
 const char pass[] = "#RO_i0t.n3t";
 
-// MUST MATCH THE IP IN YOUR CERTIFICATE (SAN)
 const char* mqtt_server = "169.254.46.215"; 
 const int mqtt_port = 1883;
 const char* mqtt_client_id = "Groupe3_IoT";
@@ -56,6 +60,8 @@ const char* topic_pub_temp = "campus/orion/sensors/temperature";
 const char* topic_pub_humi = "campus/orion/sensors/humidity";
 const char* topic_pub_pres = "campus/orion/sensors/presence";
 const char* topic_pub_co2  = "campus/orion/sensors/co2";
+
+const char* topic_sub_heat = "campus/orion/actuators/heating/setpoint";
 
 // Static IP Configuration (For Link-Local Network)
 IPAddress local_IP(169, 254, 46, 14);
@@ -139,7 +145,7 @@ void loop() {
     if (!client.connected()) {
         reconnectMQTT();
     }
-    client.loop(); 
+    client.loop();
 
     // --- READ SENSORS ---
     int co2Value = analogRead(PIN_ANALOG_CO2);
@@ -163,6 +169,16 @@ void loop() {
 
     double distanceCm = readDistance();
     int isOccupied = (distanceCm > 0 && distanceCm < 300.0) ? 1 : 0;
+    if (isOccupied == 0) {
+        if (counterEmpty == 10) {
+            loopTime = sleepTime;
+        } else {
+            counterEmpty++;
+        }
+    } else {
+        loopTime = activeTime;
+        counterEmpty = 0;
+    }
 
     // --- SEND XBEE ---
     sendXbee('P', &co2Value, sizeof(int));
@@ -192,7 +208,7 @@ void loop() {
     Serial.print(" | Hum: "); Serial.print(humidity);
     Serial.print(" | CO2: "); Serial.println(co2Value);
 
-    delay(5000); 
+    delay(loopTime); 
 }
 
 // ==========================================
@@ -238,22 +254,21 @@ void setupMQTT() {
 
 void reconnectMQTT() {
     while (!client.connected()) {
-        Serial.print("Connecting to MQTT (Secure)...");
+        Serial.print("Connecting to MQTT...");
         
-        // Connect with ID, User, Pass (if needed)
-        // Note: Some brokers require ClientID to be unique
+        // Connect with ID, User, Password
         if (client.connect(mqtt_client_id, "groupe3", "campus-iot")) {
             Serial.println("connected");
+            
+            // --- SUBSCRIBE HERE ONCE ---
+            Serial.print("Subscribing to: ");
+            Serial.println(topic_sub_heat);
+            client.subscribe(topic_sub_heat, 1); // QoS 1
+            
         } else {
             Serial.print("failed, rc=");
             Serial.print(client.state());
-            Serial.println(" try again in 5 seconds");
-            
-            // Common SSL Errors:
-            // - rc=-2: Connection failed (Network/Firewall)
-            // - rc=-4: Connection timeout
-            // - If it hangs, it might be a Certificate Mismatch
-            
+            Serial.println(" try again in 5s");
             delay(5000);
         }
     }
@@ -289,14 +304,32 @@ void publishToMQTT(const char* topic, const char* payload) {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-    // Standard callback for receiving messages (not actively used in loop)
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("]: ");
+
+    // 1. Convert Payload to String
+    char message[length + 1];
     for (unsigned int i = 0; i < length; i++) {
-        Serial.print((char)payload[i]);
+        message[i] = (char)payload[i];
     }
-    Serial.println();
+    message[length] = '\0'; // Null-terminate
+    Serial.println(message);
+
+    // 2. Check if the topic matches our Heat Setpoint topic
+    // We compare the incoming topic with our global constant
+    if (strcmp(topic, topic_sub_heat) == 0) {
+        
+        // 3. Convert String to Float (Text "21.5" -> Float 21.5)
+        float setpoint = atof(message);
+        
+        Serial.print("Bridging to XBee -> Type: H, Value: ");
+        Serial.println(setpoint);
+
+        // 4. Send via XBee
+        // We use type 'H' (Heating) and pass the address of the float variable
+        sendXbee('H', &setpoint, sizeof(float));
+    }
 }
 
 // ==========================================
