@@ -508,18 +508,26 @@ async def delete_user(
     db: Session = Depends(get_db),
     request: Request = None
 ):
+    from models.settings import UserPreference
+    from models.user import ActivityLog
+    from models.audit import AuditLog
     target_user = db.query(User).filter(User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
     if target_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    
     email = target_user.email
     before = user_snapshot(target_user)
+    # Suppression en cascade des dépendances
+    db.query(UserPreference).filter(UserPreference.user_id == target_user.id).delete()
+    db.query(ActivityLog).filter(ActivityLog.user_id == target_user.id).delete()
+    db.query(AuditLog).filter(AuditLog.user_id == target_user.id).delete()
+    # Suppression en cascade des dépendances
+    db.query(UserPreference).filter(UserPreference.user_id == target_user.id).delete()
+    db.query(ActivityLog).filter(ActivityLog.user_id == target_user.id).delete()
+    db.query(AuditLog).filter(AuditLog.user_id == target_user.id).delete()
     db.delete(target_user)
     db.commit()
-    
     log_activity(db, current_user.id, current_user.email, "user_deleted", f"Deleted user {email}")
     log_audit(
         db=db,
@@ -532,7 +540,6 @@ async def delete_user(
         after=None,
         ip_address=request.client.host if request and request.client else None
     )
-    
     return {"success": True}
 
 

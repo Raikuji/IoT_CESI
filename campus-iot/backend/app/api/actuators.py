@@ -1,26 +1,29 @@
 """
-Actuators API endpoints
+Actuators API endpoints - Energy management by room
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import List
+from typing import List, Dict
+from datetime import datetime
 
 from db import get_db
 from models import Actuator, ActuatorCommand as ActuatorCommandModel
 from schemas import (
     ActuatorCreate, ActuatorResponse,
-    ActuatorCommand, ActuatorCommandResponse, HeatingMode
+    ActuatorCommand, ActuatorCommandResponse, HeatingMode,
+    RoomEnergyConfig, RoomEnergyState
 )
-from services import mqtt_service
+from services import mqtt_service, energy_manager
 from api.auth import require_permission
 
 router = APIRouter(prefix="/actuators", tags=["actuators"])
 
-# In-memory storage for heating mode (could be moved to DB)
+# In-memory storage for backward compatibility
 heating_state = {
     "mode": "manual",
-    "setpoint": 21.0
+    "setpoint": 21.0,
+    "room": None
 }
 
 
@@ -102,38 +105,54 @@ def get_actuator_commands(
     return commands
 
 
-# Heating specific endpoints
+# ============================================
+# Heating control - Backward compatibility
+# ============================================
 @router.get("/heating/state")
 def get_heating_state():
-    """Get current heating state (mode, setpoint, room)"""
+    """Get current heating state (mode, setpoint, room) - Public endpoint"""
     return heating_state
 
 
-@router.get("/heating/mode", response_model=HeatingMode)
-def get_heating_mode():
-    """Get current heating mode"""
-    return HeatingMode(**heating_state)
-
-
 @router.post("/heating/mode", response_model=HeatingMode)
-def set_heating_mode(mode: HeatingMode, current_user=Depends(require_permission("control"))):
-    """Set heating mode (auto/manual) and setpoint"""
-    if mode.mode not in ["auto", "manual"]:
+def set_heating_mode(
+    mode: HeatingMode,
+    current_user=Depends(require_permission("control"))
+):
+    """Set heating mode (auto/manual/eco) and setpoint for a room"""
+    if mode.mode not in ["auto", "manual", "eco"]:
         raise HTTPException(
             status_code=400,
-            detail="Mode must be 'auto' or 'manual'"
+            detail="Mode must be 'auto', 'manual', or 'eco'"
         )
     
+    if mode.setpoint is not None and (mode.setpoint < 10 or mode.setpoint > 30):
+        raise HTTPException(
+            status_code=400,
+            detail="Setpoint must be between 10 and 30°C"
+        )
+    
+    room = mode.room or "default"
+    
+    # Update in-memory state
     heating_state["mode"] = mode.mode
     if mode.setpoint is not None:
         heating_state["setpoint"] = mode.setpoint
     if mode.room is not None:
         heating_state["room"] = mode.room
     
-    # Publish mode change to MQTT
-    mqtt_service.publish("actuators/heating/mode", mode.mode)
-    if mode.setpoint:
-        mqtt_service.publish("actuators/heating/setpoint", str(mode.setpoint))
+    # Update energy manager for room-based management
+    energy_manager.set_room_mode(
+        room, 
+        mode.mode, 
+        mode.setpoint or 21.0
+    )
+    
+    # Publish to MQTT (uniquement par salle)
+    if room != "default":
+        mqtt_service.publish(f"rooms/{room}/heating/mode", mode.mode, retain=True)
+        if mode.setpoint:
+            mqtt_service.publish(f"rooms/{room}/heating/setpoint", str(mode.setpoint), retain=True)
     
     return HeatingMode(**heating_state)
 
@@ -145,7 +164,11 @@ def get_heating_setpoint():
 
 
 @router.post("/heating/setpoint")
-def set_heating_setpoint(room: str, setpoint: float, current_user=Depends(require_permission("control"))):
+def set_heating_setpoint(
+    room: str,
+    setpoint: float,
+    current_user=Depends(require_permission("control"))
+):
     """Set heating temperature setpoint for a room"""
     if setpoint < 10 or setpoint > 30:
         raise HTTPException(
@@ -155,13 +178,110 @@ def set_heating_setpoint(room: str, setpoint: float, current_user=Depends(requir
     
     heating_state["setpoint"] = setpoint
     
-    # Publish to MQTT with room and setpoint
-    topic = f"campus/orion/actuators/heating"
-    payload = {
-        "room": room,
-        "mode": "manual",
-        "target": setpoint
-    }
-    mqtt_service.publish(topic, str(payload))
+    # Update energy manager
+    energy_manager.set_room_mode(room, "manual", setpoint)
+    
+    # Publish to MQTT (sans préfixe car mqtt_service l'ajoute)
+    topic = f"rooms/{room}/heating/setpoint"
+    mqtt_service.publish(topic, str(setpoint), retain=True)
     
     return {"room": room, "setpoint": setpoint}
+
+
+# ============================================
+# Room-based Energy Management
+# ============================================
+@router.post("/rooms/{room}/energy/config")
+def configure_room_energy(
+    room: str,
+    config: RoomEnergyConfig,
+    current_user=Depends(require_permission("control"))
+):
+    """Configure energy management for a room"""
+    try:
+        energy_manager.initialize_room(
+            room,
+            mode=config.mode,
+            setpoint=config.setpoint,
+            eco_setpoint=config.eco_setpoint,
+            presence_timeout_minutes=config.presence_timeout_minutes
+        )
+        return {"status": "success", "room": room, "config": config}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/rooms/{room}/energy/state", response_model=RoomEnergyState)
+def get_room_energy_state(room: str):
+    """Get energy state for a room - Public endpoint"""
+    state = energy_manager.get_room_state(room)
+    return RoomEnergyState(**state)
+
+
+@router.get("/rooms/energy/state")
+def get_all_rooms_energy_state():
+    """Get energy state for all rooms - Public endpoint"""
+    return energy_manager.get_all_rooms_state()
+
+
+@router.post("/rooms/{room}/heating/mode")
+def set_room_heating_mode(
+    room: str,
+    mode: str = Query(..., description="Mode: manual, auto, or eco"),
+    setpoint: float = Query(None, description="Target temperature"),
+    current_user=Depends(require_permission("control"))
+):
+    """Set heating mode for a specific room"""
+    try:
+        energy_manager.set_room_mode(room, mode, setpoint)
+        state = energy_manager.get_room_state(room)
+        
+        # Publish to MQTT (sans préfixe car mqtt_service l'ajoute)
+        mqtt_service.publish(
+            f"rooms/{room}/heating/mode",
+            mode,
+            retain=True
+        )
+        
+        return {"status": "success", "room": room, "state": state}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/rooms/{room}/presence")
+def update_room_presence(
+    room: str,
+    has_presence: bool = Query(..., description="True if presence detected"),
+    current_user=Depends(require_permission("control"))
+):
+    """Update presence detection for a room"""
+    energy_manager.update_presence(room, has_presence)
+    state = energy_manager.get_room_state(room)
+    
+    # Publish to MQTT (sans préfixe car mqtt_service l'ajoute)
+    mqtt_service.publish(
+        f"rooms/{room}/presence",
+        "occupied" if has_presence else "empty",
+        retain=True
+    )
+    
+    return {"status": "success", "room": room, "has_presence": has_presence, "state": state}
+
+
+@router.post("/rooms/{room}/eco-setpoint")
+def set_room_eco_setpoint(
+    room: str,
+    eco_setpoint: float = Query(..., description="Eco mode temperature"),
+    current_user=Depends(require_permission("control"))
+):
+    """Set eco mode temperature for a room"""
+    if eco_setpoint < 10 or eco_setpoint > 30:
+        raise HTTPException(
+            status_code=400,
+            detail="Eco setpoint must be between 10 and 30°C"
+        )
+    
+    energy_manager.set_eco_setpoint(room, eco_setpoint)
+    state = energy_manager.get_room_state(room)
+    
+    return {"status": "success", "room": room, "eco_setpoint": eco_setpoint, "state": state}
