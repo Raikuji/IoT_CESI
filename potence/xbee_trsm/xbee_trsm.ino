@@ -253,7 +253,7 @@ void setupMQTT() {
 // ... [Be sure to include all those functions at the bottom of the sketch] ...
 
 void reconnectMQTT() {
-    while (!client.connected()) {
+    if (!client.connected()) {
         Serial.print("Connecting to MQTT...");
         
         // Connect with ID, User, Password
