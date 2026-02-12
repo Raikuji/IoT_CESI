@@ -151,8 +151,9 @@ def set_heating_mode(
     # Publish to MQTT (uniquement par salle)
     if room != "default":
         mqtt_service.publish(f"rooms/{room}/heating/mode", mode.mode, retain=True)
-        if mode.setpoint:
+        if mode.setpoint is not None:
             mqtt_service.publish(f"rooms/{room}/heating/setpoint", str(mode.setpoint), retain=True)
+            mqtt_service.publish(f"rooms/{room}/heating/temperature", str(mode.setpoint), retain=True)
     
     return HeatingMode(**heating_state)
 

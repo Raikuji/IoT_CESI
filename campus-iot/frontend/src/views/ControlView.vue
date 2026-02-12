@@ -288,10 +288,15 @@ async function sendCommand(mode, setpoint, ecoSetpoint) {
   
   try {
     console.log('📤 Envoi:', { room: room.value, mode, setpoint, ecoSetpoint })
-    
+
+    // Envoi du mode et setpoint dans le corps JSON
     await axios.post(
-      `http://localhost:8000/api/actuators/rooms/${room.value}/heating/mode?mode=${mode}&setpoint=${setpoint}`,
-      {},
+      'http://localhost:8000/api/actuators/heating/mode',
+      {
+        mode: mode,
+        setpoint: setpoint,
+        room: room.value
+      },
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -299,35 +304,36 @@ async function sendCommand(mode, setpoint, ecoSetpoint) {
         }
       }
     )
-    
+
     console.log('✅ Mode envoyé')
-    
-    if (mode === 'eco' && ecoSetpoint) {
-      await axios.post(
-        `http://localhost:8000/api/actuators/rooms/${room.value}/eco-setpoint?eco_setpoint=${ecoSetpoint}`,
-        {},
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      )
-      console.log('✅ Eco setpoint envoyé')
-    }
-    
+
+    // Optionnel : gestion ecoSetpoint si besoin d'un endpoint séparé
+    // if (mode === 'eco' && ecoSetpoint) {
+    //   await axios.post(
+    //     `http://localhost:8000/api/actuators/rooms/${room.value}/eco-setpoint?eco_setpoint=${ecoSetpoint}`,
+    //     {},
+    //     {
+    //       headers: {
+    //         'Authorization': `Bearer ${token}`,
+    //         'Content-Type': 'application/json'
+    //       }
+    //     }
+    //   )
+    //   console.log('✅ Eco setpoint envoyé')
+    // }
+
     lastCommand.value = {
       room: room.value,
       mode: mode,
       setpoint: setpoint,
       ecoSetpoint: ecoSetpoint
     }
-    
+
     alert('✅ Commande envoyée avec succès !')
-    
+
   } catch (error) {
     console.error('❌ Erreur:', error)
-    
+
     if (error.response?.status === 401) {
       alert('❌ Erreur d\'authentification. Reconnectez-vous.')
     } else {
