@@ -61,7 +61,7 @@ const char* topic_pub_humi = "campus/orion/sensors/humidity";
 const char* topic_pub_pres = "campus/orion/sensors/presence";
 const char* topic_pub_co2  = "campus/orion/sensors/co2";
 
-const char* topic_sub_heat = "campus/orion/actuators/heating/setpoint";
+const char* topic_sub_heat = "campus/orion/rooms/X003/heating/temperature";
 
 // Static IP Configuration (For Link-Local Network)
 IPAddress local_IP(169, 254, 46, 14);
